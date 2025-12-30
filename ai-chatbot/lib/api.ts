@@ -1,11 +1,26 @@
-export async function sendInterviewMessage(message: string) {
+// lib/api.ts
+export type Message = { role: "user" | "ai"; content: string };
+
+export async function sendInterviewMessage(message: string, sessionId: string) {
   const res = await fetch("/api/interview/message", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message })
+    body: JSON.stringify({ message, sessionId })
   });
 
   if (!res.ok) throw new Error("API error");
+
+  return res.json();
+}
+
+export async function fetchPreviousChat(sessionId: string) {
+  const res = await fetch("/api/interview/message", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message: "", sessionId }) // empty message fetches current state
+  });
+
+  if (!res.ok) throw new Error("Failed to fetch previous chat");
 
   return res.json();
 }

@@ -2,9 +2,19 @@ import { NextResponse } from "next/server";
 import { interviewService } from "@/server/services/interview.service";
 
 export async function POST(req: Request) {
-  const { message } = await req.json();
+  try {
+    const { message, sessionId } = await req.json();
 
-  const reply = await interviewService.handleMessage(message);
+    if (!sessionId) {
+      return NextResponse.json({ message: "No sessionId provided", ended: true }, { status: 400 });
+    }
 
-  return NextResponse.json({ reply });
+    const result = await interviewService.handleMessage(sessionId, message);
+    return NextResponse.json(result);
+  } catch (err: unknown) {
+    return NextResponse.json({
+      message: `Server error: ${err instanceof Error ? err.message : String(err)}`,
+      ended: true
+    }, { status: 500 });
+  }
 }
