@@ -1,11 +1,15 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation"; // Next.js hook for query params
 import { v4 as uuidv4 } from "uuid";
 import { sendInterviewMessage, fetchPreviousChat } from "@/lib/api";
 import { Message } from "../server/state/interview.state";
 
 export default function Chat() {
+  const searchParams = useSearchParams();
+  const urlSessionId = searchParams.get("sessionId");
+
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -14,34 +18,31 @@ export default function Chat() {
 
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  // Initialize session and load chat
+  // Initialize sessionId and fetch previous chat
   useEffect(() => {
-    let saved = localStorage.getItem("sessionId");
-    if (!saved) {
-      saved = uuidv4();
-      localStorage.setItem("sessionId", saved);
-    }
-    setSessionId(saved);
+    const sid = urlSessionId ?? uuidv4(); // use URL sessionId or generate a new one
+    setSessionId(sid);
 
-    const loadChat = async () => {
+    const loadPreviousChat = async () => {
       try {
-        const data = await fetchPreviousChat(saved);
+        const data = await fetchPreviousChat(sid);
         if (data.messages) setMessages(data.messages);
-        if (data.ended) setEnded(data.ended);
+        if (data.ended) setEnded(true);
 
-        // If no messages, AI should start with intro automatically
+        // If no messages yet, prompt the AI to start introduction
         if (!data.messages || data.messages.length === 0) {
-          const intro = await sendInterviewMessage("", saved);
+          const intro = await sendInterviewMessage("", sid);
           if (intro.message) setMessages([{ role: "ai", content: intro.message }]);
         }
       } catch (err) {
         console.error("Error fetching previous chat:", err);
       }
     };
-    loadChat();
-  }, []);
 
-  // Scroll to bottom on new messages
+    loadPreviousChat();
+  }, [urlSessionId]);
+
+  // Scroll to bottom when messages update
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
@@ -56,9 +57,7 @@ export default function Chat() {
 
     try {
       const data = await sendInterviewMessage(input, sessionId);
-      if (data.message) {
-        setMessages(prev => [...prev, { role: "ai", content: data.message }]);
-      }
+      if (data.message) setMessages(prev => [...prev, { role: "ai", content: data.message }]);
       if (data.ended) setEnded(true);
     } catch (err) {
       setMessages(prev => [...prev, { role: "ai", content: "⚠️ Unable to reach the interviewer." }]);
@@ -85,13 +84,13 @@ export default function Chat() {
             </div>
           </div>
         ))}
+
         {loading && (
           <div className="flex justify-start">
-            <div className="bg-slate-100 px-4 py-2 rounded-lg text-sm text-slate-500">
-              Interviewer is typing…
-            </div>
+            <div className="bg-slate-100 px-4 py-2 rounded-lg text-sm text-slate-500">Interviewer is typing…</div>
           </div>
         )}
+
         <div ref={bottomRef} />
       </div>
 
