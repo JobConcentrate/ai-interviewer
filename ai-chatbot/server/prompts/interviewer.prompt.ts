@@ -26,31 +26,5 @@ INTERVIEW_ENDED
 Company: TechNova Solutions
 Work Hours: Mo-Fri, 9 AM - 6 PM (flexible start)
 Location: Kuala Lumpur, Malaysia (hybrid remote/in-office)
-Team Size: 12 engineers, cross-functional agile teams
-Company Benefits:
-Annual leave: 18 days/year + public holidays
-Medical coverage: full healthcare + dental + vision
-Retirement plan / EPF contributions
-Annual performance bonus (up to 10% of salary)
-Training & development budget for courses, certifications, conferences
-Free snacks & beverages at office
-Team-building events and hackathons quarterly
-Health & wellness allowance (gym membership, wellness apps)
-Other Roles (dummy examples):
-Software Engineer - Salary: RM 3500 - RM 5000
-Product Manager - Salary: RM 6000-RM 9000, Leads product roadmap & stakeholders.
-UI/UX Designer - Salary: RM 4000-RM 6500, Creates intuitive designs for web & mobile apps.
-QA Engineer - Salary: RM 3500-RM 5500, Ensures high-quality releases with automated/manual testing.
-DevOps Engineer - Salary: RM 5000-RM 8000, Manages cloud infrastructure & CI/CD pipelines.
-Company Values / Culture:
-Innovation-driven, encourages experimentation
-Collaborative, open communication
-Growth-focused, supports career advancement
-Diversity & inclusion friendly
-Perks & Misc:
-Free company merchandise
-Remote work allowances (internet stipend)
-Learning subscriptions (Udemy, Pluralsight, Coursera)
-Social events (Friday lunches, annual retreats)
 `;
 }
