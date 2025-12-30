@@ -6,10 +6,11 @@ import { v4 as uuidv4 } from "uuid";
 export default function AdminDashboard() {
   const [link, setLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [role, setRole] = useState<string>("software-developer"); // default role
 
   const generateInterviewLink = () => {
     const sessionId = uuidv4();
-    const url = `${window.location.origin}/room?sessionId=${sessionId}`;
+    const url = `${window.location.origin}/room?sessionId=${sessionId}&role=${role}`;
     setLink(url);
   };
 
@@ -34,6 +35,21 @@ export default function AdminDashboard() {
         <p className="text-sm text-slate-600">
           Generate a private interview link for a candidate.
         </p>
+
+        {/* Role dropdown */}
+        <div className="flex flex-col">
+          <label className="text-sm font-medium text-slate-800 mb-1">
+            Select Role
+          </label>
+          <select
+            className="border rounded-lg px-3 py-2 text-sm bg-white text-black"
+            value={role}
+            onChange={(e) => setRole(e.target.value)}
+          >
+            <option value="software-developer">Software Developer</option>
+            <option value="accounting">Accounting</option>
+          </select>
+        </div>
 
         <button
           onClick={generateInterviewLink}

@@ -1,9 +1,10 @@
 export enum InterviewStage {
   Introduction = 0,
   SkillsExperience = 1,
-  Expectations = 2,
-  CandidateQuestions = 3,
-  Ended = 4
+  Technical = 2,
+  Expectations = 3,
+  CandidateQuestions = 4,
+  Ended = 5
 }
 
 export type AiReply = {
@@ -20,7 +21,8 @@ export class InterviewState {
   currentStage = InterviewStage.Introduction;
   questionsAskedInStage = 0;
   ended = false;
-  history: HistoryItem[] = [];
+  history: HistoryItem[] = []
+  role?: string;
 }
 
 export interface OpenAiResponse {

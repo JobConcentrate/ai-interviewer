@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation"; // Next.js hook for query params
+import { useSearchParams } from "next/navigation";
 import { v4 as uuidv4 } from "uuid";
 import { sendInterviewMessage, fetchPreviousChat } from "@/lib/api";
 import { Message } from "../server/state/interview.state";
@@ -9,6 +9,7 @@ import { Message } from "../server/state/interview.state";
 export default function Chat() {
   const searchParams = useSearchParams();
   const urlSessionId = searchParams.get("sessionId");
+  const urlRole = searchParams.get("role") ?? undefined;
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -18,9 +19,8 @@ export default function Chat() {
 
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  // Initialize sessionId and fetch previous chat
   useEffect(() => {
-    const sid = urlSessionId ?? uuidv4(); // use URL sessionId or generate a new one
+    const sid = urlSessionId ?? uuidv4();
     setSessionId(sid);
 
     const loadPreviousChat = async () => {
@@ -29,9 +29,8 @@ export default function Chat() {
         if (data.messages) setMessages(data.messages);
         if (data.ended) setEnded(true);
 
-        // If no messages yet, prompt the AI to start introduction
         if (!data.messages || data.messages.length === 0) {
-          const intro = await sendInterviewMessage("", sid);
+          const intro = await sendInterviewMessage("", sid, urlRole);
           if (intro.message) setMessages([{ role: "ai", content: intro.message }]);
         }
       } catch (err) {
@@ -40,9 +39,8 @@ export default function Chat() {
     };
 
     loadPreviousChat();
-  }, [urlSessionId]);
+  }, [urlSessionId, urlRole]);
 
-  // Scroll to bottom when messages update
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
@@ -56,7 +54,7 @@ export default function Chat() {
     setLoading(true);
 
     try {
-      const data = await sendInterviewMessage(input, sessionId);
+      const data = await sendInterviewMessage(input, sessionId, urlRole);
       if (data.message) setMessages(prev => [...prev, { role: "ai", content: data.message }]);
       if (data.ended) setEnded(true);
     } catch (err) {
