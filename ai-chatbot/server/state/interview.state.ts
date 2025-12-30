@@ -30,3 +30,5 @@ export interface OpenAiResponse {
 interface OpenAiChoice {
   message: { role: "system" | "user" | "assistant"; content: string };
 }
+
+export type Message = { role: "user" | "ai"; content: string };

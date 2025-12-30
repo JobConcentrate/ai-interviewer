@@ -1,6 +1,3 @@
-// lib/api.ts
-export type Message = { role: "user" | "ai"; content: string };
-
 export async function sendInterviewMessage(message: string, sessionId: string) {
   const res = await fetch("/api/interview/message", {
     method: "POST",

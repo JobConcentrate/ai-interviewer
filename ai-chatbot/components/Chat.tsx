@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
-import { sendInterviewMessage, fetchPreviousChat, Message } from "@/lib/api";
+import { sendInterviewMessage, fetchPreviousChat } from "@/lib/api";
+import { Message } from "../server/state/interview.state";
 
 export default function Chat() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -13,6 +14,7 @@ export default function Chat() {
 
   const bottomRef = useRef<HTMLDivElement>(null);
 
+  // Initialize session and load chat
   useEffect(() => {
     let saved = localStorage.getItem("sessionId");
     if (!saved) {
@@ -21,18 +23,25 @@ export default function Chat() {
     }
     setSessionId(saved);
 
-    const loadPreviousChat = async () => {
+    const loadChat = async () => {
       try {
         const data = await fetchPreviousChat(saved);
         if (data.messages) setMessages(data.messages);
-        if (data.ended) setEnded(true);
+        if (data.ended) setEnded(data.ended);
+
+        // If no messages, AI should start with intro automatically
+        if (!data.messages || data.messages.length === 0) {
+          const intro = await sendInterviewMessage("", saved);
+          if (intro.message) setMessages([{ role: "ai", content: intro.message }]);
+        }
       } catch (err) {
         console.error("Error fetching previous chat:", err);
       }
     };
-    loadPreviousChat();
+    loadChat();
   }, []);
 
+  // Scroll to bottom on new messages
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
@@ -47,7 +56,9 @@ export default function Chat() {
 
     try {
       const data = await sendInterviewMessage(input, sessionId);
-      if (data.message) setMessages(prev => [...prev, { role: "ai", content: data.message }]);
+      if (data.message) {
+        setMessages(prev => [...prev, { role: "ai", content: data.message }]);
+      }
       if (data.ended) setEnded(true);
     } catch (err) {
       setMessages(prev => [...prev, { role: "ai", content: "⚠️ Unable to reach the interviewer." }]);
@@ -76,7 +87,9 @@ export default function Chat() {
         ))}
         {loading && (
           <div className="flex justify-start">
-            <div className="bg-slate-100 px-4 py-2 rounded-lg text-sm text-slate-500">Interviewer is typing…</div>
+            <div className="bg-slate-100 px-4 py-2 rounded-lg text-sm text-slate-500">
+              Interviewer is typing…
+            </div>
           </div>
         )}
         <div ref={bottomRef} />
