@@ -1,10 +1,10 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import { v4 as uuidv4 } from "uuid";
 
-export default function AdminDashboard() {
+function AdminDashboardContent() {
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
   const employer = searchParams.get("employer");
@@ -101,5 +101,17 @@ export default function AdminDashboard() {
         </div>
       )}
     </main>
+  );
+}
+
+export default function AdminDashboard() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-slate-600">Loading...</p>
+      </div>
+    }>
+      <AdminDashboardContent />
+    </Suspense>
   );
 }
