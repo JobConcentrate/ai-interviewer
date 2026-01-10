@@ -29,7 +29,7 @@ export default function AdminDashboard() {
     <main className="min-h-screen flex items-center justify-center bg-slate-100 p-4">
       <div className="bg-white p-6 rounded-xl shadow-lg space-y-4 max-w-lg w-full">
         <h1 className="text-xl font-semibold text-slate-800">
-          Admin Dashboard
+          Admin Dashboardddd
         </h1>
 
         <p className="text-sm text-slate-600">
