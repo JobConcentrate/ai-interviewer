@@ -1,50 +1,67 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 
 export default function AdminDashboard() {
+  const searchParams = useSearchParams();
+  const token = searchParams.get("token");
+  const employer = searchParams.get("employer");
+
+  const [role, setRole] = useState("software-developer");
   const [link, setLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [role, setRole] = useState<string>("software-developer");
+
+  // Guard: missing token or employer
+  if (!token || !employer) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-red-600">
+          ❌ Missing { !token ? "token" : "employer name" }
+        </p>
+      </div>
+    );
+  }
 
   const generateInterviewLink = () => {
     const sessionId = uuidv4();
-    const url = `${window.location.origin}/room?sessionId=${sessionId}&role=${role}`;
+    const url = `${window.location.origin}/room` +
+      `?sessionId=${sessionId}` +
+      `&role=${role}` +
+      `&token=${token}`;
+
     setLink(url);
   };
 
   const copyToClipboard = async () => {
     if (!link) return;
-
     await navigator.clipboard.writeText(link);
     setCopied(true);
-
-    setTimeout(() => {
-      setCopied(false);
-    }, 2000);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   return (
     <main className="min-h-screen flex items-center justify-center bg-slate-100 p-4">
       <div className="bg-white p-6 rounded-xl shadow-lg space-y-4 max-w-lg w-full">
+
         <h1 className="text-xl font-semibold text-slate-800">
-          Admin Dashboard
+          Employer Dashboard
         </h1>
 
         <p className="text-sm text-slate-600">
-          Generate a private interview link for a candidate.
+          Hello <span className="font-medium">{employer}</span>! Generate an interview link for your candidate below.
         </p>
 
-        {/* Role dropdown */}
-        <div className="flex flex-col">
-          <label className="text-sm font-medium text-slate-800 mb-1">
-            Select Role
+        {/* Role Selector */}
+        <div>
+          <label className="text-sm font-medium text-slate-800 mb-1 block">
+            Candidate Role
           </label>
           <select
-            className="border rounded-lg px-3 py-2 text-sm bg-white text-black"
             value={role}
             onChange={(e) => setRole(e.target.value)}
+            className="w-full border rounded-lg px-3 py-2 text-sm text-black"
           >
             <option value="software-developer">Software Developer</option>
             <option value="accountant">Accountant</option>
@@ -53,28 +70,23 @@ export default function AdminDashboard() {
 
         <button
           onClick={generateInterviewLink}
-          className="w-full bg-slate-900 text-white py-2 rounded-lg hover:bg-slate-800 transition"
+          className="w-full bg-slate-900 text-white py-2 rounded-lg hover:bg-slate-800"
         >
-          Generate New Link
+          Generate Interview Link
         </button>
 
         {link && (
           <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-800">
-              Interview Link
-            </label>
-
+            <label className="text-sm font-medium text-black">Interview Link</label>
             <div className="flex gap-2">
               <input
-                className="flex-1 border rounded-lg px-3 py-2 text-sm bg-white text-black cursor-text select-all"
                 value={link}
                 readOnly
+                className="flex-1 border rounded-lg px-3 py-2 text-sm text-black"
               />
-
               <button
                 onClick={copyToClipboard}
-                disabled={copied}
-                className="bg-slate-800 text-white px-3 rounded-lg text-sm disabled:opacity-50"
+                className="bg-slate-800 text-white px-3 rounded-lg text-sm"
               >
                 Copy
               </button>
@@ -83,10 +95,9 @@ export default function AdminDashboard() {
         )}
       </div>
 
-      {/* Toast */}
       {copied && (
-        <div className="fixed bottom-6 right-6 bg-slate-900 text-white px-4 py-2 rounded-lg shadow-lg text-sm">
-          ✅ Link copied to clipboard
+        <div className="fixed bottom-6 right-6 bg-slate-900 text-white px-4 py-2 rounded-lg text-sm">
+          ✅ Link copied
         </div>
       )}
     </main>
