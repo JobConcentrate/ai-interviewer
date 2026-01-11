@@ -1,9 +1,13 @@
+/* eslint-disable react-hooks/exhaustive-deps */
+/* eslint-disable react-hooks/rules-of-hooks */
+ 
 "use client";
 
 import { useSearchParams } from "next/navigation";
 import { useState, Suspense, useEffect } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { Role } from "@/lib/supabase";
+import { fetchRoles, createRole, deleteRole, sendInterviewInvite } from "@/lib/api";
 
 function AdminDashboardContent() {
   const searchParams = useSearchParams();
@@ -16,11 +20,15 @@ function AdminDashboardContent() {
   const [copied, setCopied] = useState(false);
   const [activeTab, setActiveTab] = useState("generate");
   const [subTab, setSubTab] = useState("generate-link");
-  
+
   // Add role form state
   const [newRoleName, setNewRoleName] = useState("");
   const [newRoleDescription, setNewRoleDescription] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const [candidateEmail, setCandidateEmail] = useState("");
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [sending, setSending] = useState(false);
 
   // Guard: missing token or employer
   if (!token || !employer) {
@@ -34,16 +42,13 @@ function AdminDashboardContent() {
   }
 
   // Fetch roles on mount
-  // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
-    fetchRoles();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    loadRoles();
   }, [token]);
 
-  const fetchRoles = async () => {
+  const loadRoles = async () => {
     try {
-      const response = await fetch(`/api/admin/roles?token=${token}`);
-      const data = await response.json();
+      const data = await fetchRoles(token);
       if (data.roles) {
         setRoles(data.roles);
         // Set first role as default if available
@@ -58,27 +63,17 @@ function AdminDashboardContent() {
 
   const handleCreateRole = async () => {
     if (!newRoleName.trim()) return;
-    
+
     setLoading(true);
     try {
-      const response = await fetch("/api/admin/roles", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          token,
-          name: newRoleName,
-          description: newRoleDescription,
-        }),
-      });
-
-      if (response.ok) {
-        setNewRoleName("");
-        setNewRoleDescription("");
-        await fetchRoles();
-        setSubTab("generate-link"); // Switch back to generate link tab
-      }
+      await createRole(token, newRoleName, newRoleDescription);
+      setNewRoleName("");
+      setNewRoleDescription("");
+      await loadRoles();
+      setSubTab("generate-link");
     } catch (error) {
       console.error("Error creating role:", error);
+      alert("Failed to create role");
     } finally {
       setLoading(false);
     }
@@ -88,33 +83,25 @@ function AdminDashboardContent() {
     if (!confirm("Are you sure you want to delete this role?")) return;
 
     try {
-      const response = await fetch(`/api/admin/roles?roleId=${roleId}`, {
-        method: "DELETE",
-      });
-
-      if (response.ok) {
-        await fetchRoles();
-      }
+      await deleteRole(roleId);
+      await loadRoles();
     } catch (error) {
       console.error("Error deleting role:", error);
+      alert("Failed to delete role");
     }
   };
 
   const generateInterviewLink = () => {
     const sessionId = uuidv4();
-
     // Find selected role object
     const selectedRole = roles.find((r) => r.id === role);
-
     if (!selectedRole) {
       alert("Role not found");
       return;
     }
 
     // Convert role name to chatbot-safe format
-    const roleSlug = selectedRole.name
-      .toLowerCase()
-      .replace(/\s+/g, ""); // remove spaces
+    const roleSlug = selectedRole.name.toLowerCase().replace(/\s+/g, "");
 
     const url =
       `${window.location.origin}/room` +
@@ -130,6 +117,23 @@ function AdminDashboardContent() {
     await navigator.clipboard.writeText(link);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleSendInvite = async () => {
+    if (!link || !candidateEmail) return;
+
+    setSending(true);
+    try {
+      await sendInterviewInvite(candidateEmail, employer, link);
+      alert("✅ Email sent");
+      setCandidateEmail("");
+      setShowConfirm(false);
+    } catch (error) {
+      console.error("Error sending invite:", error);
+      alert("❌ Failed to send email");
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -155,7 +159,7 @@ function AdminDashboardContent() {
                     : "text-slate-500 hover:text-slate-700"
                 }`}
               >
-                Generate Link
+                Link
                 {activeTab === "generate" && (
                   <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-slate-900" />
                 )}
@@ -219,7 +223,8 @@ function AdminDashboardContent() {
                         Generate Interview Link
                       </h2>
                       <p className="text-slate-600">
-                        Create a unique interview link for your candidate. Share this link to begin the interview process.
+                        Create a unique interview link for your candidate. Share
+                        this link to begin the interview process.
                       </p>
                     </div>
 
@@ -276,6 +281,28 @@ function AdminDashboardContent() {
                           </div>
                         </div>
                       )}
+
+                      {link && (
+                        <div className="space-y-4 pt-6 border-t border-slate-200">
+                          <h3 className="text-sm font-medium text-slate-900">
+                            Send interview link via email
+                          </h3>
+                          <input
+                            type="email"
+                            placeholder="Candidate email"
+                            value={candidateEmail}
+                            onChange={(e) => setCandidateEmail(e.target.value)}
+                            className="w-full border border-slate-300 rounded-lg px-4 py-2.5 text-sm text-black focus:outline-none focus:ring-2 focus:ring-slate-900"
+                          />
+                          <button
+                            onClick={() => setShowConfirm(true)}
+                            disabled={!candidateEmail}
+                            className="w-full bg-slate-800 text-white py-2.5 rounded-lg hover:bg-slate-700 transition-colors font-medium disabled:opacity-50"
+                          >
+                            Send Interview Link
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </>
                 )}
@@ -293,8 +320,10 @@ function AdminDashboardContent() {
 
                     {/* Add New Role Form */}
                     <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6 space-y-6 mb-6">
-                      <h3 className="text-lg font-semibold text-slate-900">Add New Role</h3>
-                      
+                      <h3 className="text-lg font-semibold text-slate-900">
+                        Add New Role
+                      </h3>
+
                       <div>
                         <label className="text-sm font-medium text-slate-900 mb-2 block">
                           Role Name
@@ -316,7 +345,9 @@ function AdminDashboardContent() {
                           placeholder="Brief description of the role..."
                           rows={4}
                           value={newRoleDescription}
-                          onChange={(e) => setNewRoleDescription(e.target.value)}
+                          onChange={(e) =>
+                            setNewRoleDescription(e.target.value)
+                          }
                           className="w-full border border-slate-300 rounded-lg px-4 py-2.5 text-sm text-black focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent"
                         />
                       </div>
@@ -332,8 +363,10 @@ function AdminDashboardContent() {
 
                     {/* Existing Roles List */}
                     <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
-                      <h3 className="text-lg font-semibold text-slate-900 mb-4">Existing Roles</h3>
-                      
+                      <h3 className="text-lg font-semibold text-slate-900 mb-4">
+                        Existing Roles
+                      </h3>
+
                       {roles.length > 0 ? (
                         <div className="space-y-3">
                           {roles.map((r) => (
@@ -342,7 +375,9 @@ function AdminDashboardContent() {
                               className="flex items-start justify-between p-4 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
                             >
                               <div className="flex-1">
-                                <h4 className="font-medium text-slate-900">{r.name}</h4>
+                                <h4 className="font-medium text-slate-900">
+                                  {r.name}
+                                </h4>
                                 {r.description && (
                                   <p className="text-sm text-slate-600 mt-1">
                                     {r.description}
@@ -417,6 +452,33 @@ function AdminDashboardContent() {
       {copied && (
         <div className="fixed bottom-6 right-6 bg-slate-900 text-white px-4 py-2.5 rounded-lg text-sm shadow-lg">
           ✅ Link copied to clipboard
+        </div>
+      )}
+
+      {showConfirm && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-md space-y-4">
+            <h3 className="text-lg font-semibold text-slate-900">
+              Confirm Email
+            </h3>
+            <p className="text-sm text-slate-600">Send interview link to:</p>
+            <p className="font-medium text-slate-900">{candidateEmail}</p>
+            <div className="flex gap-3 pt-4">
+              <button
+                onClick={() => setShowConfirm(false)}
+                className="flex-1 border border-slate-300 rounded-lg py-2 text-sm text-black hover:bg-slate-100"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSendInvite}
+                disabled={sending}
+                className="flex-1 bg-slate-900 text-white rounded-lg py-2 text-sm hover:bg-slate-800 disabled:opacity-50"
+              >
+                {sending ? "Sending..." : "Confirm & Send"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </main>
