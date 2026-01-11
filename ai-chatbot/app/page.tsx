@@ -70,7 +70,7 @@ function AdminDashboardContent() {
       setNewRoleName("");
       setNewRoleDescription("");
       await loadRoles();
-      setSubTab("generate-link");
+      alert("✅ Role created successfully");
     } catch (error) {
       console.error("Error creating role:", error);
       alert("Failed to create role");
