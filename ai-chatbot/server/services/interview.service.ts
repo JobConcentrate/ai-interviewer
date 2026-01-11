@@ -23,10 +23,20 @@ export class InterviewService {
 
     if (role && !state.role) state.role = role;
 
-    if (state.history.length === 0) {
-      const intro = this.getStagePrompt(state);
+    // Initial greeting - only happens once at the very start
+    if (state.history.length === 0 && !userMessage) {
+      const greeting = "Hello! Are you ready for your interview?";
+      state.history.push({ role: "assistant", message: greeting });
+      return { message: greeting, messages: this.mapHistory(state), ended: false };
+    }
+
+    // If user confirms readiness, move to introduction
+    if (state.history.length === 1 && userMessage) {
+      const intro = "Could you briefly introduce yourself?";
+      state.history.push({ role: "user", message: userMessage });
       state.history.push({ role: "assistant", message: intro });
-      return { message: intro, messages: this.mapHistory(state), ended: false };
+      state.currentStage = InterviewStage.Introduction;
+      return { message: intro, ended: false };
     }
 
     if (!userMessage) return { messages: this.mapHistory(state), message: "", ended: state.ended };
@@ -52,7 +62,7 @@ export class InterviewService {
     if (aiReply.message.includes("INTERVIEW_ENDED") || state.currentStage >= InterviewStage.Ended) {
       state.ended = true;
       return {
-        message: aiReply.message.replace("INTERVIEW_ENDED", "").trim() + "\n\nThank you. The interview has concluded.",
+        message: aiReply.message.replace("INTERVIEW_ENDED", "").trim() + "\n\nThe interview has concluded.",
         ended: true,
       };
     }
