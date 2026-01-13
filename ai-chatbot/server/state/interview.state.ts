@@ -23,6 +23,7 @@ export class InterviewState {
   ended = false;
   history: HistoryItem[] = []
   role?: string;
+  employer?: string;
 }
 
 export interface OpenAiResponse {

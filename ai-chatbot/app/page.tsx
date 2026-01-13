@@ -107,7 +107,8 @@ function AdminDashboardContent() {
       `${window.location.origin}/room` +
       `?sessionId=${sessionId}` +
       `&role=${roleSlug}` +
-      `&token=${token}`;
+      `&token=${token}` +
+      `&employer=${encodeURIComponent(String(employer))}`;
 
     setLink(url);
   };

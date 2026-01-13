@@ -1,10 +1,10 @@
 import { Role } from "./supabase";
 
-export async function sendInterviewMessage(message: string, sessionId: string, role?: string) {
+export async function sendInterviewMessage(message: string, sessionId: string, role?: string, employer?: string) {
   const res = await fetch("/api/interview/message", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message, sessionId, role })
+    body: JSON.stringify({ message, sessionId, role, employer })
   });
 
   if (!res.ok) throw new Error("API error");
@@ -12,11 +12,11 @@ export async function sendInterviewMessage(message: string, sessionId: string, r
   return res.json();
 }
 
-export async function fetchPreviousChat(sessionId: string, role?: string) {
+export async function fetchPreviousChat(sessionId: string, role?: string, employer?: string) {
   const res = await fetch("/api/interview/message", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message: "", sessionId, role })
+    body: JSON.stringify({ message: "", sessionId, role, employer })
   });
 
   if (!res.ok) throw new Error("Failed to fetch previous chat");

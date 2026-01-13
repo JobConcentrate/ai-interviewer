@@ -5,52 +5,61 @@ import { buildInterviewerPrompt } from "./../prompts/interviewer.prompt";
 const interviewStates = new Map<string, InterviewState>();
 
 export class InterviewService {
-  private getState(sessionId: string, role?: string): InterviewState {
+  private getState(
+    sessionId: string,
+    role?: string,
+    employer?: string
+  ): InterviewState {
     if (!interviewStates.has(sessionId)) {
       const state = new InterviewState();
-      if (role) state.role = role; 
+      if (role) state.role = role;
+      if (employer) state.employer = employer;
       interviewStates.set(sessionId, state);
     }
-    return interviewStates.get(sessionId)!;
+
+    const state = interviewStates.get(sessionId)!;
+
+    // Safety: only set if missing
+    if (role && !state.role) state.role = role;
+    if (employer && !state.employer) state.employer = employer;
+
+    return state;
   }
 
   async handleMessage(
     sessionId: string,
     userMessage = "",
-    role?: string
+    role?: string,
+    employer?: string
   ): Promise<{ message: string; messages?: Message[]; ended: boolean }> {
-    const state = this.getState(sessionId, role);
+    const state = this.getState(sessionId, role, employer);
 
-    if (role && !state.role) state.role = role;
-
-    // Initial greeting - only happens once at the very start
+    /* ---------- INITIAL GREETING ---------- */
     if (state.history.length === 0 && !userMessage) {
-      const greeting = "Hello! Are you ready for your interview?";
+      const greeting = `Hello! Welcome to your interview with ${
+        state.employer ?? "our company"
+      }. Are you ready to begin?`;
+
       state.history.push({ role: "assistant", message: greeting });
       return { message: greeting, messages: this.mapHistory(state), ended: false };
     }
 
-    // If user confirms readiness, move to introduction
+    /* ---------- INTRO ---------- */
     if (state.history.length === 1 && userMessage) {
-      const intro = "Could you briefly introduce yourself?";
+      const intro = "Great. Could you briefly introduce yourself?";
       state.history.push({ role: "user", message: userMessage });
       state.history.push({ role: "assistant", message: intro });
       state.currentStage = InterviewStage.Introduction;
       return { message: intro, ended: false };
     }
 
-    if (!userMessage) return { messages: this.mapHistory(state), message: "", ended: state.ended };
-    if (state.ended) return { message: "The interview has ended. Thank you.", ended: true };
+    if (!userMessage)
+      return { messages: this.mapHistory(state), message: "", ended: state.ended };
 
-    const lower = userMessage.toLowerCase();
-    if (lower.includes("next stage") || lower.includes("skip")) {
-      state.currentStage++;
-      state.questionsAskedInStage = 0;
-      const prompt = this.getStagePrompt(state);
-      state.history.push({ role: "assistant", message: prompt });
-      return { message: prompt, ended: false };
-    }
+    if (state.ended)
+      return { message: "The interview has ended. Thank you.", ended: true };
 
+    /* ---------- AI RESPONSE ---------- */
     const aiReply: AiReply = await openAiService.getReply(userMessage, state);
 
     state.history.push({ role: "user", message: userMessage });
@@ -59,10 +68,15 @@ export class InterviewService {
     if (aiReply.questionAnswered) state.questionsAskedInStage++;
     this.advanceStageIfNeeded(state);
 
-    if (aiReply.message.includes("INTERVIEW_ENDED") || state.currentStage >= InterviewStage.Ended) {
+    if (
+      aiReply.message.includes("INTERVIEW_ENDED") ||
+      state.currentStage >= InterviewStage.Ended
+    ) {
       state.ended = true;
       return {
-        message: aiReply.message.replace("INTERVIEW_ENDED", "").trim() + "\n\nThe interview has concluded.",
+        message:
+          aiReply.message.replace("INTERVIEW_ENDED", "").trim() +
+          "\n\nThe interview has concluded.",
         ended: true,
       };
     }
