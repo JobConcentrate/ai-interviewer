@@ -491,6 +491,12 @@ function AdminDashboardContent() {
                           roles.find((r) => r.id === interview.role_id)?.name ||
                           "Unknown role";
                         const startedAt = interview.started_at || interview.created_at;
+                        const ratingDisplay =
+                          interview.rating !== null
+                            ? `${interview.rating}/10`
+                            : interview.status === "completed"
+                              ? "Pending"
+                              : "Not rated";
 
                         return (
                           <details
@@ -523,6 +529,18 @@ function AdminDashboardContent() {
                             </summary>
 
                             <div className="mt-4 space-y-3">
+                              <div className="rounded-md bg-slate-50 border border-slate-200 p-3">
+                                <p className="text-xs text-slate-600">
+                                  <span className="font-medium text-slate-900">AI Rating:</span>{" "}
+                                  {ratingDisplay}
+                                </p>
+                                <p className="text-xs text-slate-600 mt-1">
+                                  {interview.rating_comment ||
+                                    (interview.status === "completed"
+                                      ? "Rating comment pending."
+                                      : "Rating will be generated after completion.")}
+                                </p>
+                              </div>
                               {interview.messages.length === 0 ? (
                                 <p className="text-sm text-slate-500">
                                   No messages yet.

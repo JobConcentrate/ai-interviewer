@@ -141,6 +141,14 @@ export class InterviewService {
       state.ended = true;
       if (state.interviewId) {
         await dbService.updateInterviewStatus(state.interviewId, "completed");
+        const rating = await openAiService.getInterviewRating(state);
+        if (rating) {
+          await dbService.updateInterviewRating(
+            state.interviewId,
+            rating.rating,
+            rating.comment || null
+          );
+        }
       }
       return {
         message: aiMessage,

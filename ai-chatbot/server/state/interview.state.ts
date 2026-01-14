@@ -12,6 +12,11 @@ export type AiReply = {
   questionAnswered: boolean;
 };
 
+export type InterviewRating = {
+  rating: number;
+  comment: string;
+};
+
 export type HistoryItem = {
   role: "user" | "assistant";
   message: string;

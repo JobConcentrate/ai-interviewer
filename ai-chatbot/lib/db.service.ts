@@ -139,6 +139,22 @@ export class DatabaseService {
     if (error) throw error;
   }
 
+  async updateInterviewRating(
+    interviewId: string,
+    rating: number,
+    comment?: string | null
+  ): Promise<void> {
+    const { error } = await supabase
+      .from('interviews')
+      .update({
+        rating,
+        rating_comment: comment ?? null,
+      })
+      .eq('id', interviewId);
+
+    if (error) throw error;
+  }
+
   async updateInterviewCandidateName(
     interviewId: string,
     candidateName: string

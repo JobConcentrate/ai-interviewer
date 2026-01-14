@@ -31,6 +31,8 @@ export type Interview = {
   role_label: string | null;
   candidate_name: string | null;
   status: 'in_progress' | 'completed';
+  rating: number | null;
+  rating_comment: string | null;
   started_at: string;
   ended_at: string | null;
   created_at: string;
