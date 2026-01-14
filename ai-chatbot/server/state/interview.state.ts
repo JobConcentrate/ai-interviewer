@@ -24,6 +24,9 @@ export class InterviewState {
   history: HistoryItem[] = []
   role?: string;
   employer?: string;
+  interviewId?: string;
+  employerId?: string;
+  loadedFromDb = false;
 }
 
 export interface OpenAiResponse {

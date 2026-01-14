@@ -1,10 +1,17 @@
-import { Role } from "./supabase";
+import { Role, InterviewWithMessages } from "./supabase";
 
-export async function sendInterviewMessage(message: string, sessionId: string, role?: string, employer?: string) {
+export async function sendInterviewMessage(
+  message: string,
+  sessionId: string,
+  role?: string,
+  employer?: string,
+  token?: string,
+  roleId?: string
+) {
   const res = await fetch("/api/interview/message", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message, sessionId, role, employer })
+    body: JSON.stringify({ message, sessionId, role, employer, token, roleId })
   });
 
   if (!res.ok) throw new Error("API error");
@@ -12,11 +19,17 @@ export async function sendInterviewMessage(message: string, sessionId: string, r
   return res.json();
 }
 
-export async function fetchPreviousChat(sessionId: string, role?: string, employer?: string) {
+export async function fetchPreviousChat(
+  sessionId: string,
+  role?: string,
+  employer?: string,
+  token?: string,
+  roleId?: string
+) {
   const res = await fetch("/api/interview/message", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message: "", sessionId, role, employer })
+    body: JSON.stringify({ message: "", sessionId, role, employer, token, roleId })
   });
 
   if (!res.ok) throw new Error("Failed to fetch previous chat");
@@ -69,5 +82,13 @@ export async function sendInterviewInvite(
     }),
   });
   if (!response.ok) throw new Error("Failed to send invite");
+  return response.json();
+}
+
+export async function fetchInterviews(
+  token: string
+): Promise<{ interviews: InterviewWithMessages[] }> {
+  const response = await fetch(`/api/admin/interviews?token=${encodeURIComponent(token)}`);
+  if (!response.ok) throw new Error("Failed to fetch interviews");
   return response.json();
 }

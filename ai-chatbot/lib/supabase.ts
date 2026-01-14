@@ -28,6 +28,7 @@ export type Interview = {
   session_id: string;
   employer_id: string;
   role_id: string | null;
+  role_label: string | null;
   candidate_name: string | null;
   status: 'in_progress' | 'completed';
   started_at: string;
@@ -41,4 +42,8 @@ export type InterviewMessage = {
   role: 'user' | 'assistant';
   message: string;
   created_at: string;
+};
+
+export type InterviewWithMessages = Interview & {
+  messages: InterviewMessage[];
 };

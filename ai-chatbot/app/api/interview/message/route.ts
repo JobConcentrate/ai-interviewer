@@ -3,13 +3,20 @@ import { interviewService } from "@/server/services/interview.service";
 
 export async function POST(req: Request) {
   try {
-    const { message, sessionId, role, employer } = await req.json();
+    const { message, sessionId, role, employer, token, roleId } = await req.json();
 
     if (!sessionId) {
       return NextResponse.json({ message: "No sessionId provided", ended: true }, { status: 400 });
     }
 
-    const result = await interviewService.handleMessage(sessionId, message, role, employer);
+    const result = await interviewService.handleMessage(
+      sessionId,
+      message,
+      role,
+      employer,
+      token,
+      roleId
+    );
     return NextResponse.json(result);
   } catch (err: unknown) {
     return NextResponse.json({

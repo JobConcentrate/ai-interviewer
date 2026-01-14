@@ -84,7 +84,8 @@ export class DatabaseService {
   async createInterview(
     sessionId: string,
     employerId: string,
-    roleId?: string
+    roleId?: string,
+    roleLabel?: string
   ): Promise<Interview> {
     const { data, error } = await supabase
       .from('interviews')
@@ -92,6 +93,7 @@ export class DatabaseService {
         session_id: sessionId,
         employer_id: employerId,
         role_id: roleId || null,
+        role_label: roleLabel || null,
       })
       .select()
       .single();
@@ -144,6 +146,26 @@ export class DatabaseService {
     const { error } = await supabase
       .from('interviews')
       .update({ candidate_name: candidateName })
+      .eq('id', interviewId);
+
+    if (error) throw error;
+  }
+
+  async updateInterviewRole(
+    interviewId: string,
+    roleId?: string | null,
+    roleLabel?: string | null
+  ): Promise<void> {
+    const updates: { role_id?: string | null; role_label?: string | null } = {};
+
+    if (roleId !== undefined) updates.role_id = roleId;
+    if (roleLabel !== undefined) updates.role_label = roleLabel;
+
+    if (Object.keys(updates).length === 0) return;
+
+    const { error } = await supabase
+      .from('interviews')
+      .update(updates)
       .eq('id', interviewId);
 
     if (error) throw error;

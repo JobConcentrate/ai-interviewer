@@ -1,15 +1,18 @@
 import { InterviewState, InterviewStage, AiReply, Message } from "../state/interview.state";
 import { openAiService } from "./openai.service";
 import { buildInterviewerPrompt } from "./../prompts/interviewer.prompt";
+import { dbService } from "@/lib/db.service";
 
 const interviewStates = new Map<string, InterviewState>();
 
 export class InterviewService {
-  private getState(
+  private async getState(
     sessionId: string,
     role?: string,
-    employer?: string
-  ): InterviewState {
+    employer?: string,
+    token?: string,
+    roleId?: string
+  ): Promise<InterviewState> {
     if (!interviewStates.has(sessionId)) {
       const state = new InterviewState();
       if (role) state.role = role;
@@ -23,6 +26,58 @@ export class InterviewService {
     if (role && !state.role) state.role = role;
     if (employer && !state.employer) state.employer = employer;
 
+    if (token && !state.loadedFromDb) {
+      const employerRecord = await dbService.getOrCreateEmployer(
+        token,
+        employer ?? token
+      );
+
+      if (!state.employer) state.employer = employerRecord.name;
+      state.employerId = employerRecord.id;
+
+      let interview = await dbService.getInterviewBySession(sessionId);
+
+      if (interview && interview.employer_id !== employerRecord.id) {
+        throw new Error("Session does not belong to this employer");
+      }
+
+      if (!interview) {
+        interview = await dbService.createInterview(
+          sessionId,
+          employerRecord.id,
+          roleId,
+          role
+        );
+      } else {
+        if (roleId && interview.role_id && interview.role_id !== roleId) {
+          throw new Error("Session role does not match interview");
+        }
+
+        const shouldUpdateRoleId = roleId && !interview.role_id;
+        const shouldUpdateRoleLabel = role && !interview.role_label;
+
+        if (shouldUpdateRoleId || shouldUpdateRoleLabel) {
+          await dbService.updateInterviewRole(
+            interview.id,
+            shouldUpdateRoleId ? roleId : undefined,
+            shouldUpdateRoleLabel ? role : undefined
+          );
+          if (shouldUpdateRoleId) interview.role_id = roleId!;
+          if (shouldUpdateRoleLabel) interview.role_label = role!;
+        }
+      }
+
+      state.interviewId = interview.id;
+      state.ended = interview.status === "completed";
+
+      const messages = await dbService.getMessagesByInterview(interview.id);
+      if (messages.length > 0 && state.history.length === 0) {
+        state.history = messages.map(m => ({ role: m.role, message: m.message }));
+      }
+
+      state.loadedFromDb = true;
+    }
+
     return state;
   }
 
@@ -30,9 +85,11 @@ export class InterviewService {
     sessionId: string,
     userMessage = "",
     role?: string,
-    employer?: string
+    employer?: string,
+    token?: string,
+    roleId?: string
   ): Promise<{ message: string; messages?: Message[]; ended: boolean }> {
-    const state = this.getState(sessionId, role, employer);
+    const state = await this.getState(sessionId, role, employer, token, roleId);
 
     /* ---------- INITIAL GREETING ---------- */
     if (state.history.length === 0 && !userMessage) {
@@ -41,6 +98,7 @@ export class InterviewService {
       }. Are you ready to begin?`;
 
       state.history.push({ role: "assistant", message: greeting });
+      await this.persistMessage(state, "assistant", greeting);
       return { message: greeting, messages: this.mapHistory(state), ended: false };
     }
 
@@ -49,6 +107,8 @@ export class InterviewService {
       const intro = "Great. Could you briefly introduce yourself?";
       state.history.push({ role: "user", message: userMessage });
       state.history.push({ role: "assistant", message: intro });
+      await this.persistMessage(state, "user", userMessage);
+      await this.persistMessage(state, "assistant", intro);
       state.currentStage = InterviewStage.Introduction;
       return { message: intro, ended: false };
     }
@@ -61,9 +121,15 @@ export class InterviewService {
 
     /* ---------- AI RESPONSE ---------- */
     const aiReply: AiReply = await openAiService.getReply(userMessage, state);
+    const aiMessage = aiReply.message.includes("INTERVIEW_ENDED")
+      ? aiReply.message.replace("INTERVIEW_ENDED", "").trim() +
+        "\n\nThe interview has concluded."
+      : aiReply.message;
 
     state.history.push({ role: "user", message: userMessage });
-    state.history.push({ role: "assistant", message: aiReply.message });
+    state.history.push({ role: "assistant", message: aiMessage });
+    await this.persistMessage(state, "user", userMessage);
+    await this.persistMessage(state, "assistant", aiMessage);
 
     if (aiReply.questionAnswered) state.questionsAskedInStage++;
     this.advanceStageIfNeeded(state);
@@ -73,19 +139,29 @@ export class InterviewService {
       state.currentStage >= InterviewStage.Ended
     ) {
       state.ended = true;
+      if (state.interviewId) {
+        await dbService.updateInterviewStatus(state.interviewId, "completed");
+      }
       return {
-        message:
-          aiReply.message.replace("INTERVIEW_ENDED", "").trim() +
-          "\n\nThe interview has concluded.",
+        message: aiMessage,
         ended: true,
       };
     }
 
-    return { message: aiReply.message, ended: false };
+    return { message: aiMessage, ended: false };
   }
 
   private mapHistory(state: InterviewState): Message[] {
     return state.history.map(h => ({ role: h.role === "assistant" ? "ai" : "user", content: h.message }));
+  }
+
+  private async persistMessage(
+    state: InterviewState,
+    role: "user" | "assistant",
+    message: string
+  ) {
+    if (!state.interviewId) return;
+    await dbService.saveMessage(state.interviewId, role, message);
   }
 
   private advanceStageIfNeeded(state: InterviewState) {

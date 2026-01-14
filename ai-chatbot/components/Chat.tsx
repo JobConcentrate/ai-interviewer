@@ -11,6 +11,8 @@ export default function Chat() {
   const urlSessionId = searchParams.get("sessionId");
   const urlRole = searchParams.get("role") ?? undefined;
   const urlEmployer = searchParams.get("employer") ?? undefined;
+  const urlToken = searchParams.get("token") ?? undefined;
+  const urlRoleId = searchParams.get("roleId") ?? undefined;
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -26,12 +28,12 @@ export default function Chat() {
 
     const loadPreviousChat = async () => {
       try {
-        const data = await fetchPreviousChat(sid, urlRole, urlEmployer);
+        const data = await fetchPreviousChat(sid, urlRole, urlEmployer, urlToken, urlRoleId);
         if (data.messages) setMessages(data.messages);
         if (data.ended) setEnded(true);
 
         if (!data.messages || data.messages.length === 0) {
-          const intro = await sendInterviewMessage("", sid, urlRole, urlEmployer);
+          const intro = await sendInterviewMessage("", sid, urlRole, urlEmployer, urlToken, urlRoleId);
           if (intro.message) setMessages([{ role: "ai", content: intro.message }]);
         }
       } catch (err) {
@@ -40,7 +42,7 @@ export default function Chat() {
     };
 
     loadPreviousChat();
-  }, [urlSessionId, urlRole, urlEmployer]);
+  }, [urlSessionId, urlRole, urlEmployer, urlToken, urlRoleId]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -55,7 +57,7 @@ export default function Chat() {
     setLoading(true);
 
     try {
-      const data = await sendInterviewMessage(input, sessionId, urlRole, urlEmployer);
+      const data = await sendInterviewMessage(input, sessionId, urlRole, urlEmployer, urlToken, urlRoleId);
       if (data.message) setMessages(prev => [...prev, { role: "ai", content: data.message }]);
       if (data.ended) setEnded(true);
     } catch (err) {

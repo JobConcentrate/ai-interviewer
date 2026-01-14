@@ -6,8 +6,8 @@
 import { useSearchParams } from "next/navigation";
 import { useState, Suspense, useEffect } from "react";
 import { v4 as uuidv4 } from "uuid";
-import { Role } from "@/lib/supabase";
-import { fetchRoles, createRole, deleteRole, sendInterviewInvite } from "@/lib/api";
+import { Role, InterviewWithMessages } from "@/lib/supabase";
+import { fetchRoles, createRole, deleteRole, sendInterviewInvite, fetchInterviews } from "@/lib/api";
 
 function AdminDashboardContent() {
   const searchParams = useSearchParams();
@@ -29,6 +29,9 @@ function AdminDashboardContent() {
   const [candidateEmail, setCandidateEmail] = useState("");
   const [showConfirm, setShowConfirm] = useState(false);
   const [sending, setSending] = useState(false);
+  const [interviews, setInterviews] = useState<InterviewWithMessages[]>([]);
+  const [loadingInterviews, setLoadingInterviews] = useState(false);
+  const [interviewsError, setInterviewsError] = useState<string | null>(null);
 
   // Guard: missing token or employer
   if (!token || !employer) {
@@ -46,6 +49,12 @@ function AdminDashboardContent() {
     loadRoles();
   }, [token]);
 
+  useEffect(() => {
+    if (activeTab === "candidates") {
+      loadInterviews();
+    }
+  }, [activeTab, token]);
+
   const loadRoles = async () => {
     try {
       const data = await fetchRoles(token);
@@ -58,6 +67,22 @@ function AdminDashboardContent() {
       }
     } catch (error) {
       console.error("Error fetching roles:", error);
+    }
+  };
+
+  const loadInterviews = async () => {
+    if (!token) return;
+    setLoadingInterviews(true);
+    setInterviewsError(null);
+
+    try {
+      const data = await fetchInterviews(token);
+      setInterviews(data.interviews || []);
+    } catch (error) {
+      console.error("Error fetching interviews:", error);
+      setInterviewsError("Failed to load interviews");
+    } finally {
+      setLoadingInterviews(false);
     }
   };
 
@@ -100,14 +125,14 @@ function AdminDashboardContent() {
       return;
     }
 
-    // Convert role name to chatbot-safe format
-    const roleSlug = selectedRole.name.toLowerCase().replace(/\s+/g, "");
+    const roleName = selectedRole.name;
 
     const url =
       `${window.location.origin}/room` +
       `?sessionId=${sessionId}` +
-      `&role=${roleSlug}` +
-      `&token=${token}` +
+      `&role=${encodeURIComponent(roleName)}` +
+      `&roleId=${selectedRole.id}` +
+      `&token=${encodeURIComponent(String(token))}` +
       `&employer=${encodeURIComponent(String(employer))}`;
 
     setLink(url);
@@ -423,26 +448,109 @@ function AdminDashboardContent() {
                     View and manage all candidates who have completed interviews.
                   </p>
                 </div>
-                <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-8">
-                  <div className="text-center text-slate-500">
-                    <svg
-                      className="w-16 h-16 mx-auto mb-4 text-slate-300"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
-                      />
-                    </svg>
-                    <p className="text-lg font-medium">No candidates yet</p>
-                    <p className="text-sm mt-1">
-                      Generated interview links will appear here once completed
-                    </p>
-                  </div>
+                <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
+                  {loadingInterviews && (
+                    <div className="text-center text-slate-500">
+                      Loading interviews...
+                    </div>
+                  )}
+
+                  {interviewsError && (
+                    <div className="text-center text-red-600">
+                      {interviewsError}
+                    </div>
+                  )}
+
+                  {!loadingInterviews && !interviewsError && interviews.length === 0 && (
+                    <div className="text-center text-slate-500">
+                      <svg
+                        className="w-16 h-16 mx-auto mb-4 text-slate-300"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+                        />
+                      </svg>
+                      <p className="text-lg font-medium">No candidates yet</p>
+                      <p className="text-sm mt-1">
+                        Generated interview links will appear here once completed
+                      </p>
+                    </div>
+                  )}
+
+                  {!loadingInterviews && !interviewsError && interviews.length > 0 && (
+                    <div className="space-y-4">
+                      {interviews.map((interview) => {
+                        const roleName =
+                          interview.role_label ||
+                          roles.find((r) => r.id === interview.role_id)?.name ||
+                          "Unknown role";
+                        const startedAt = interview.started_at || interview.created_at;
+
+                        return (
+                          <details
+                            key={interview.id}
+                            className="rounded-lg border border-slate-200 p-4"
+                          >
+                            <summary className="cursor-pointer list-none">
+                              <div className="flex items-start justify-between gap-4">
+                                <div>
+                                  <p className="text-sm font-medium text-slate-900">
+                                    {interview.candidate_name || "Candidate"}
+                                  </p>
+                                  <p className="text-xs text-slate-500">
+                                    Role: {roleName} | Session: {interview.session_id}
+                                  </p>
+                                  <p className="text-xs text-slate-500">
+                                    Started: {startedAt ? new Date(startedAt).toLocaleString() : "Unknown"}
+                                  </p>
+                                </div>
+                                <span
+                                  className={`text-xs px-2 py-1 rounded-full ${
+                                    interview.status === "completed"
+                                      ? "bg-emerald-100 text-emerald-700"
+                                      : "bg-amber-100 text-amber-700"
+                                  }`}
+                                >
+                                  {interview.status === "completed" ? "Completed" : "In progress"}
+                                </span>
+                              </div>
+                            </summary>
+
+                            <div className="mt-4 space-y-3">
+                              {interview.messages.length === 0 ? (
+                                <p className="text-sm text-slate-500">
+                                  No messages yet.
+                                </p>
+                              ) : (
+                                interview.messages.map((msg) => (
+                                  <div
+                                    key={msg.id}
+                                    className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                                  >
+                                    <div
+                                      className={`max-w-[80%] rounded-lg px-3 py-2 text-xs leading-relaxed ${
+                                        msg.role === "user"
+                                          ? "bg-slate-900 text-white"
+                                          : "bg-slate-100 text-slate-900"
+                                      }`}
+                                    >
+                                      {msg.message}
+                                    </div>
+                                  </div>
+                                ))
+                              )}
+                            </div>
+                          </details>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
