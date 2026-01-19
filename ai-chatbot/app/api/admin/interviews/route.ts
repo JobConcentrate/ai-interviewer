@@ -15,14 +15,7 @@ export async function GET(request: NextRequest) {
     }
 
     const interviews = await dbService.getInterviewsByEmployer(employer.id);
-    const interviewsWithMessages = await Promise.all(
-      interviews.map(async (interview) => {
-        const messages = await dbService.getMessagesByInterview(interview.id);
-        return { ...interview, messages };
-      })
-    );
-
-    return NextResponse.json({ interviews: interviewsWithMessages });
+    return NextResponse.json({ interviews });
   } catch (error) {
     console.error("Error fetching interviews:", error);
     return NextResponse.json(

@@ -113,6 +113,17 @@ export class DatabaseService {
     return data;
   }
 
+  async getInterviewById(interviewId: string): Promise<Interview | null> {
+    const { data, error } = await supabase
+      .from('interviews')
+      .select('*')
+      .eq('id', interviewId)
+      .single();
+
+    if (error) return null;
+    return data;
+  }
+
   async getInterviewsByEmployer(employerId: string): Promise<Interview[]> {
     const { data, error } = await supabase
       .from('interviews')

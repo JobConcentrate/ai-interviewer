@@ -1,4 +1,4 @@
-import { Role, InterviewWithMessages } from "./supabase";
+import { Interview, InterviewMessage, Role } from "./supabase";
 
 export async function sendInterviewMessage(
   message: string,
@@ -87,8 +87,19 @@ export async function sendInterviewInvite(
 
 export async function fetchInterviews(
   token: string
-): Promise<{ interviews: InterviewWithMessages[] }> {
+): Promise<{ interviews: Interview[] }> {
   const response = await fetch(`/api/admin/interviews?token=${encodeURIComponent(token)}`);
   if (!response.ok) throw new Error("Failed to fetch interviews");
+  return response.json();
+}
+
+export async function fetchInterviewMessages(
+  token: string,
+  interviewId: string
+): Promise<{ messages: InterviewMessage[] }> {
+  const response = await fetch(
+    `/api/admin/interview-messages?token=${encodeURIComponent(token)}&interviewId=${encodeURIComponent(interviewId)}`
+  );
+  if (!response.ok) throw new Error("Failed to fetch interview messages");
   return response.json();
 }

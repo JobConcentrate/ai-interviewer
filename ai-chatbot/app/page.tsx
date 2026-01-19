@@ -6,8 +6,15 @@
 import { useSearchParams } from "next/navigation";
 import { useState, Suspense, useEffect } from "react";
 import { v4 as uuidv4 } from "uuid";
-import { Role, InterviewWithMessages } from "@/lib/supabase";
-import { fetchRoles, createRole, deleteRole, sendInterviewInvite, fetchInterviews } from "@/lib/api";
+import { Interview, InterviewMessage, Role } from "@/lib/supabase";
+import {
+  fetchRoles,
+  createRole,
+  deleteRole,
+  sendInterviewInvite,
+  fetchInterviews,
+  fetchInterviewMessages,
+} from "@/lib/api";
 
 function AdminDashboardContent() {
   const searchParams = useSearchParams();
@@ -29,9 +36,21 @@ function AdminDashboardContent() {
   const [candidateEmail, setCandidateEmail] = useState("");
   const [showConfirm, setShowConfirm] = useState(false);
   const [sending, setSending] = useState(false);
-  const [interviews, setInterviews] = useState<InterviewWithMessages[]>([]);
+  const [interviews, setInterviews] = useState<Interview[]>([]);
   const [loadingInterviews, setLoadingInterviews] = useState(false);
   const [interviewsError, setInterviewsError] = useState<string | null>(null);
+  const [messagesByInterview, setMessagesByInterview] = useState<
+    Record<string, InterviewMessage[]>
+  >({});
+  const [loadingMessagesByInterview, setLoadingMessagesByInterview] = useState<
+    Record<string, boolean>
+  >({});
+  const [loadedMessagesByInterview, setLoadedMessagesByInterview] = useState<
+    Record<string, boolean>
+  >({});
+  const [messagesErrorByInterview, setMessagesErrorByInterview] = useState<
+    Record<string, string>
+  >({});
 
   // Guard: missing token or employer
   if (!token || !employer) {
@@ -78,11 +97,53 @@ function AdminDashboardContent() {
     try {
       const data = await fetchInterviews(token);
       setInterviews(data.interviews || []);
+      setMessagesByInterview({});
+      setLoadingMessagesByInterview({});
+      setLoadedMessagesByInterview({});
+      setMessagesErrorByInterview({});
     } catch (error) {
       console.error("Error fetching interviews:", error);
       setInterviewsError("Failed to load interviews");
     } finally {
       setLoadingInterviews(false);
+    }
+  };
+
+  const loadMessagesForInterview = async (interviewId: string) => {
+    if (!token) return;
+    if (loadingMessagesByInterview[interviewId]) return;
+    if (loadedMessagesByInterview[interviewId]) return;
+
+    setLoadingMessagesByInterview((prev) => ({
+      ...prev,
+      [interviewId]: true,
+    }));
+    setMessagesErrorByInterview((prev) => ({
+      ...prev,
+      [interviewId]: "",
+    }));
+
+    try {
+      const data = await fetchInterviewMessages(token, interviewId);
+      setMessagesByInterview((prev) => ({
+        ...prev,
+        [interviewId]: data.messages || [],
+      }));
+      setLoadedMessagesByInterview((prev) => ({
+        ...prev,
+        [interviewId]: true,
+      }));
+    } catch (error) {
+      console.error("Error fetching interview messages:", error);
+      setMessagesErrorByInterview((prev) => ({
+        ...prev,
+        [interviewId]: "Failed to load messages",
+      }));
+    } finally {
+      setLoadingMessagesByInterview((prev) => ({
+        ...prev,
+        [interviewId]: false,
+      }));
     }
   };
 
@@ -497,11 +558,20 @@ function AdminDashboardContent() {
                             : interview.status === "completed"
                               ? "Pending"
                               : "Not rated";
+                        const messages = messagesByInterview[interview.id] || [];
+                        const isLoadingMessages = loadingMessagesByInterview[interview.id];
+                        const hasLoadedMessages = loadedMessagesByInterview[interview.id];
+                        const messagesError = messagesErrorByInterview[interview.id];
 
                         return (
                           <details
                             key={interview.id}
                             className="rounded-lg border border-slate-200 p-4"
+                            onToggle={(event) => {
+                              if (event.currentTarget.open) {
+                                loadMessagesForInterview(interview.id);
+                              }
+                            }}
                           >
                             <summary className="cursor-pointer list-none">
                               <div className="flex items-start justify-between gap-4">
@@ -541,12 +611,35 @@ function AdminDashboardContent() {
                                       : "Rating will be generated after completion.")}
                                 </p>
                               </div>
-                              {interview.messages.length === 0 ? (
+                              {isLoadingMessages && (
+                                <p className="text-sm text-slate-500">
+                                  Loading messages...
+                                </p>
+                              )}
+                              {!isLoadingMessages && messagesError && (
+                                <p className="text-sm text-red-600">
+                                  {messagesError}
+                                </p>
+                              )}
+                              {!isLoadingMessages &&
+                                !messagesError &&
+                                !hasLoadedMessages && (
+                                  <p className="text-sm text-slate-500">
+                                    Expand to load messages.
+                                  </p>
+                                )}
+                              {!isLoadingMessages &&
+                              !messagesError &&
+                              hasLoadedMessages &&
+                              messages.length === 0 ? (
                                 <p className="text-sm text-slate-500">
                                   No messages yet.
                                 </p>
                               ) : (
-                                interview.messages.map((msg) => (
+                                !isLoadingMessages &&
+                                !messagesError &&
+                                hasLoadedMessages &&
+                                messages.map((msg) => (
                                   <div
                                     key={msg.id}
                                     className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
