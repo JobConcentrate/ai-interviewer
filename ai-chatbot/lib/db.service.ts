@@ -96,6 +96,7 @@ export class DatabaseService {
         role_id: roleId || null,
         role_label: roleLabel || null,
         access_token: accessToken || null,
+        started_at: null,
       })
       .select()
       .single();
@@ -146,10 +147,23 @@ export class DatabaseService {
       .from('interviews')
       .select('*')
       .eq('employer_id', employerId)
+      .not('started_at', 'is', null)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
     return data || [];
+  }
+
+  async markInterviewStarted(interviewId: string): Promise<void> {
+    const { error } = await supabase
+      .from('interviews')
+      .update({
+        started_at: new Date().toISOString(),
+        status: 'in_progress',
+      })
+      .eq('id', interviewId);
+
+    if (error) throw error;
   }
 
   async updateInterviewStatus(

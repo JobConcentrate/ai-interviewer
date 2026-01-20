@@ -35,7 +35,7 @@ export type Interview = {
   status: 'in_progress' | 'completed';
   rating: number | null;
   rating_comment: string | null;
-  started_at: string;
+  started_at: string | null;
   ended_at: string | null;
   created_at: string;
 };

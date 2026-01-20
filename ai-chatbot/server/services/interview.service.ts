@@ -83,6 +83,7 @@ export class InterviewService {
 
       if (interview) {
         state.interviewId = interview.id;
+        state.startedAt = interview.started_at ?? null;
         if (interview.role_label && !state.role) {
           state.role = interview.role_label;
         }
@@ -123,7 +124,8 @@ export class InterviewService {
     token?: string,
     roleId?: string,
     candidateEmail?: string,
-    accessToken?: string
+    accessToken?: string,
+    startInterview?: boolean
   ): Promise<{ message: string; messages?: Message[]; ended: boolean }> {
     const state = await this.getState(
       sessionId,
@@ -134,6 +136,13 @@ export class InterviewService {
       candidateEmail,
       accessToken
     );
+
+    const hasUserMessage = Boolean(userMessage?.trim());
+    const shouldStart = Boolean(startInterview) || hasUserMessage;
+    if (shouldStart && state.interviewId && !state.startedAt) {
+      await dbService.markInterviewStarted(state.interviewId);
+      state.startedAt = new Date().toISOString();
+    }
 
     /* ---------- INITIAL GREETING ---------- */
     if (state.history.length === 0 && !userMessage) {

@@ -8,7 +8,8 @@ export async function sendInterviewMessage(
   token?: string,
   roleId?: string,
   candidateEmail?: string,
-  accessToken?: string
+  accessToken?: string,
+  startInterview?: boolean
 ) {
   const res = await fetch("/api/interview/message", {
     method: "POST",
@@ -22,6 +23,7 @@ export async function sendInterviewMessage(
       roleId,
       candidateEmail,
       accessToken,
+      startInterview,
     })
   });
 
@@ -37,7 +39,8 @@ export async function fetchPreviousChat(
   token?: string,
   roleId?: string,
   candidateEmail?: string,
-  accessToken?: string
+  accessToken?: string,
+  startInterview?: boolean
 ) {
   const res = await fetch("/api/interview/message", {
     method: "POST",
@@ -51,6 +54,7 @@ export async function fetchPreviousChat(
       roleId,
       candidateEmail,
       accessToken,
+      startInterview,
     })
   });
 

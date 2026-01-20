@@ -36,6 +36,7 @@ export class InterviewState {
   interviewId?: string;
   employerId?: string;
   loadedFromDb = false;
+  startedAt?: string | null;
 }
 
 export interface OpenAiResponse {

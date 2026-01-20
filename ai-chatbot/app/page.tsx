@@ -25,9 +25,13 @@ function AdminDashboardContent() {
   const [role, setRole] = useState("");
   const [roles, setRoles] = useState<Role[]>([]);
   const [link, setLink] = useState<string | null>(null);
+  const [voiceLink, setVoiceLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [activeTab, setActiveTab] = useState("generate");
   const [subTab, setSubTab] = useState("generate-link");
+  const [inviteLinkType, setInviteLinkType] = useState<"chat" | "voice">(
+    "chat"
+  );
 
   // Add role form state
   const [newRoleName, setNewRoleName] = useState("");
@@ -270,24 +274,33 @@ function AdminDashboardContent() {
         selectedRole.name
       );
 
-      const url =
+      const chatUrl =
         `${window.location.origin}/room` +
         `?sessionId=${data.sessionId}` +
         `&role=${encodeURIComponent(selectedRole.name)}` +
         `&roleId=${selectedRole.id}` +
         `&employer=${encodeURIComponent(String(employer))}` +
         `&accessToken=${encodeURIComponent(data.accessToken)}`;
+      const voiceUrl =
+        `${window.location.origin}/voice` +
+        `?sessionId=${data.sessionId}` +
+        `&role=${encodeURIComponent(selectedRole.name)}` +
+        `&roleId=${selectedRole.id}` +
+        `&employer=${encodeURIComponent(String(employer))}` +
+        `&accessToken=${encodeURIComponent(data.accessToken)}`;
 
-      setLink(url);
+      setLink(chatUrl);
+      setVoiceLink(voiceUrl);
+      setInviteLinkType("chat");
     } catch (error) {
       console.error("Error creating interview link:", error);
       showEmailToast("error", "Failed to create interview link");
     }
   };
 
-  const copyToClipboard = async () => {
-    if (!link) return;
-    await navigator.clipboard.writeText(link);
+  const copyToClipboard = async (value?: string | null) => {
+    if (!value) return;
+    await navigator.clipboard.writeText(value);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -301,9 +314,15 @@ function AdminDashboardContent() {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
   };
 
+  const getSelectedInviteLink = () => {
+    return inviteLinkType === "voice" ? voiceLink : link;
+  };
+
   const handleOpenEmailConfirm = () => {
     const trimmedEmail = candidateEmail.trim();
+    const selectedLink = getSelectedInviteLink();
     if (!trimmedEmail) return;
+    if (!selectedLink) return;
     if (!isValidEmail(trimmedEmail)) {
       showEmailToast("error", "Enter a valid email address");
       return;
@@ -330,7 +349,8 @@ function AdminDashboardContent() {
 
   const handleSendInvite = async () => {
     const trimmedEmail = candidateEmail.trim();
-    if (!link || !trimmedEmail) return;
+    const selectedLink = getSelectedInviteLink();
+    if (!selectedLink || !trimmedEmail) return;
     if (!isValidEmail(trimmedEmail)) {
       showEmailToast("error", "Enter a valid email address");
       return;
@@ -339,7 +359,7 @@ function AdminDashboardContent() {
     setSending(true);
     try {
       const emailForRecord = getCandidateEmailForRecord(trimmedEmail);
-      const inviteLink = buildInviteLink(link, emailForRecord);
+      const inviteLink = buildInviteLink(selectedLink, emailForRecord);
       await sendInterviewInvite(trimmedEmail, employer, inviteLink);
       showEmailToast("success", "Email sent");
       setCandidateEmail("");
@@ -479,23 +499,45 @@ function AdminDashboardContent() {
                       </button>
 
                       {link && (
-                        <div className="space-y-2 pt-4 border-t border-slate-200">
-                          <label className="text-sm font-medium text-black block">
-                            Interview Link
-                          </label>
-                          <div className="flex gap-2">
-                            <input
-                              value={link}
-                              readOnly
-                              className="flex-1 border border-slate-300 rounded-lg px-4 py-2.5 text-sm text-black bg-slate-50 focus:outline-none"
-                            />
-                            <button
-                              onClick={copyToClipboard}
-                              className="bg-slate-900 text-white px-4 rounded-lg text-sm hover:bg-slate-800 transition-colors font-medium"
-                            >
-                              Copy
-                            </button>
+                        <div className="space-y-4 pt-4 border-t border-slate-200">
+                          <div className="space-y-2">
+                            <label className="text-sm font-medium text-black block">
+                              Chat Interview Link
+                            </label>
+                            <div className="flex gap-2">
+                              <input
+                                value={link}
+                                readOnly
+                                className="flex-1 border border-slate-300 rounded-lg px-4 py-2.5 text-sm text-black bg-slate-50 focus:outline-none"
+                              />
+                              <button
+                                onClick={() => copyToClipboard(link)}
+                                className="bg-slate-900 text-white px-4 rounded-lg text-sm hover:bg-slate-800 transition-colors font-medium"
+                              >
+                                Copy
+                              </button>
+                            </div>
                           </div>
+                          {voiceLink && (
+                            <div className="space-y-2">
+                              <label className="text-sm font-medium text-black block">
+                                Voice Interview Link
+                              </label>
+                              <div className="flex gap-2">
+                                <input
+                                  value={voiceLink}
+                                  readOnly
+                                  className="flex-1 border border-slate-300 rounded-lg px-4 py-2.5 text-sm text-black bg-slate-50 focus:outline-none"
+                                />
+                                <button
+                                  onClick={() => copyToClipboard(voiceLink)}
+                                  className="bg-slate-900 text-white px-4 rounded-lg text-sm hover:bg-slate-800 transition-colors font-medium"
+                                >
+                                  Copy
+                                </button>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
 
@@ -504,6 +546,36 @@ function AdminDashboardContent() {
                           <h3 className="text-sm font-medium text-slate-900">
                             Send interview link via email
                           </h3>
+                          <div className="space-y-2">
+                            <p className="text-xs text-slate-500">
+                              Choose link type
+                            </p>
+                            <div className="grid grid-cols-2 gap-2">
+                              <button
+                                onClick={() => setInviteLinkType("chat")}
+                                className={`rounded-lg border py-2 text-sm font-medium transition-colors ${
+                                  inviteLinkType === "chat"
+                                    ? "bg-slate-900 text-white border-slate-900"
+                                    : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"
+                                }`}
+                                aria-pressed={inviteLinkType === "chat"}
+                              >
+                                Chat
+                              </button>
+                              <button
+                                onClick={() => setInviteLinkType("voice")}
+                                className={`rounded-lg border py-2 text-sm font-medium transition-colors ${
+                                  inviteLinkType === "voice"
+                                    ? "bg-slate-900 text-white border-slate-900"
+                                    : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"
+                                }`}
+                                aria-pressed={inviteLinkType === "voice"}
+                                disabled={!voiceLink}
+                              >
+                                Voice
+                              </button>
+                            </div>
+                          </div>
                           <input
                             type="email"
                             placeholder="Candidate email"
@@ -849,7 +921,10 @@ function AdminDashboardContent() {
             <h3 className="text-lg font-semibold text-slate-900">
               Confirm Email
             </h3>
-            <p className="text-sm text-slate-600">Send interview link to:</p>
+            <p className="text-sm text-slate-600">
+              Send {inviteLinkType === "voice" ? "voice" : "chat"} interview
+              link to:
+            </p>
             <p className="font-medium text-slate-900">{candidateEmail}</p>
             <div className="flex gap-3 pt-4">
               <button
@@ -965,8 +1040,3 @@ export default function AdminDashboard() {
     </Suspense>
   );
 }
-
-
-
-
-
