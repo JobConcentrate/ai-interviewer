@@ -25,6 +25,43 @@ export async function GET(request: NextRequest) {
   }
 }
 
+export async function POST(request: NextRequest) {
+  try {
+    const { token, roleId, roleLabel } = await request.json();
+
+    if (!token || !roleId || !roleLabel) {
+      return NextResponse.json(
+        { error: "Token, roleId, and roleLabel required" },
+        { status: 400 }
+      );
+    }
+
+    const employer = await dbService.getEmployerByToken(token);
+    if (!employer) {
+      return NextResponse.json({ error: "Employer not found" }, { status: 404 });
+    }
+
+    const sessionId = crypto.randomUUID();
+    const accessToken = crypto.randomUUID();
+
+    await dbService.createInterview(
+      sessionId,
+      employer.id,
+      roleId,
+      roleLabel,
+      accessToken
+    );
+
+    return NextResponse.json({ sessionId, accessToken });
+  } catch (error) {
+    console.error("Error creating interview:", error);
+    return NextResponse.json(
+      { error: "Failed to create interview" },
+      { status: 500 }
+    );
+  }
+}
+
 export async function DELETE(request: NextRequest) {
   const token = request.nextUrl.searchParams.get("token");
   const interviewId = request.nextUrl.searchParams.get("interviewId");

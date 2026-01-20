@@ -15,48 +15,80 @@ export class OpenAiService {
       ...(message ? [{ role: "user", content: message }] : [])
     ];
 
-    try {
-      const res = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          model: "gpt-4.1-mini",
-          messages,
-          temperature: 0.3
-        })
-      });
+    const maxAttempts = 2;
+    let lastError = "";
 
-      const json: OpenAiResponse & { error?: { message: string } } = await res.json();
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const res = await fetch("https://api.openai.com/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            model: "gpt-4.1-mini",
+            messages,
+            temperature: 0.3
+          })
+        });
 
-      if (json.error) {
-        return {
-          message: `OpenAI API Error: ${json.error.message}`,
-          questionAnswered: false
-        };
+        const json: OpenAiResponse & { error?: { message: string } } = await res.json();
+
+        if (json.error) {
+          lastError = json.error.message;
+        } else if (!json.choices || !Array.isArray(json.choices) || json.choices.length === 0) {
+          lastError = "OpenAI returned no response";
+        } else {
+          const content: string = json.choices[0].message?.content ?? "";
+
+          const ended: boolean = content.includes("INTERVIEW_ENDED");
+          const answered: boolean = content.includes("CountAnswer: YES");
+          const cleanedMessage: string = content
+            .replace(/CountAnswer:.*/g, "")
+            .replace(/INTERVIEW_ENDED/g, "")
+            .trim();
+
+          return {
+            message: cleanedMessage,
+            questionAnswered: answered,
+            interviewEnded: ended,
+          };
+        }
+      } catch (err: unknown) {
+        lastError = err instanceof Error ? err.message : String(err);
       }
 
-      if (!json.choices || !Array.isArray(json.choices) || json.choices.length === 0) {
-        return { message: "OpenAI returned no response", questionAnswered: false };
+      if (attempt < maxAttempts) {
+        await this.sleep(1500);
       }
-
-      const content: string = json.choices[0].message?.content ?? "";
-
-      const answered: boolean = content.includes("CountAnswer: YES");
-      const cleanedMessage: string = content.replace(/CountAnswer:.*/g, "").trim();
-
-      return { message: cleanedMessage, questionAnswered: answered };
-    } catch (err: unknown) {
-      return {
-        message: `OpenAI request failed: ${err instanceof Error ? err.message : String(err)}`,
-        questionAnswered: false
-      };
     }
+
+    return {
+      message: `OpenAI request failed: ${lastError || "Unknown error"}`,
+      questionAnswered: false,
+      interviewEnded: false,
+    };
   }
 
   async getInterviewRating(state: InterviewState): Promise<InterviewRating | null> {
+    const maxAttempts = 3;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      const rating = await this.requestInterviewRating(state);
+      if (rating) return rating;
+
+      if (attempt < maxAttempts) {
+        await this.sleep(60000);
+      }
+    }
+
+    return null;
+  }
+
+  private async requestInterviewRating(
+    state: InterviewState
+  ): Promise<InterviewRating | null> {
     const systemPrompt = [
       "You are an interview evaluator.",
       "Review the full transcript and assign a performance rating.",
@@ -100,6 +132,10 @@ export class OpenAiService {
     } catch {
       return null;
     }
+  }
+
+  private async sleep(ms: number) {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 
   private parseRating(content: string): InterviewRating | null {

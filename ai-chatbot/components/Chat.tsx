@@ -14,6 +14,7 @@ export default function Chat() {
   const urlToken = searchParams.get("token") ?? undefined;
   const urlRoleId = searchParams.get("roleId") ?? undefined;
   const urlCandidateEmail = searchParams.get("candidateEmail") ?? undefined;
+  const urlAccessToken = searchParams.get("accessToken") ?? undefined;
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -35,7 +36,8 @@ export default function Chat() {
           urlEmployer,
           urlToken,
           urlRoleId,
-          urlCandidateEmail
+          urlCandidateEmail,
+          urlAccessToken
         );
         if (data.messages) setMessages(data.messages);
         if (data.ended) setEnded(true);
@@ -48,7 +50,8 @@ export default function Chat() {
             urlEmployer,
             urlToken,
             urlRoleId,
-            urlCandidateEmail
+            urlCandidateEmail,
+            urlAccessToken
           );
           if (intro.message) setMessages([{ role: "ai", content: intro.message }]);
         }
@@ -58,7 +61,15 @@ export default function Chat() {
     };
 
     loadPreviousChat();
-  }, [urlSessionId, urlRole, urlEmployer, urlToken, urlRoleId, urlCandidateEmail]);
+  }, [
+    urlSessionId,
+    urlRole,
+    urlEmployer,
+    urlToken,
+    urlRoleId,
+    urlCandidateEmail,
+    urlAccessToken,
+  ]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -80,7 +91,8 @@ export default function Chat() {
         urlEmployer,
         urlToken,
         urlRoleId,
-        urlCandidateEmail
+        urlCandidateEmail,
+        urlAccessToken
       );
       if (data.message) setMessages(prev => [...prev, { role: "ai", content: data.message }]);
       if (data.ended) setEnded(true);

@@ -85,7 +85,8 @@ export class DatabaseService {
     sessionId: string,
     employerId: string,
     roleId?: string,
-    roleLabel?: string
+    roleLabel?: string,
+    accessToken?: string
   ): Promise<Interview> {
     const { data, error } = await supabase
       .from('interviews')
@@ -94,12 +95,13 @@ export class DatabaseService {
         employer_id: employerId,
         role_id: roleId || null,
         role_label: roleLabel || null,
+        access_token: accessToken || null,
       })
       .select()
       .single();
 
     if (error) throw error;
-    return data!;
+    return data!; 
   }
 
   async getInterviewBySession(sessionId: string): Promise<Interview | null> {
@@ -107,6 +109,21 @@ export class DatabaseService {
       .from('interviews')
       .select('*')
       .eq('session_id', sessionId)
+      .single();
+
+    if (error) return null;
+    return data;
+  }
+
+  async getInterviewBySessionAndAccessToken(
+    sessionId: string,
+    accessToken: string
+  ): Promise<Interview | null> {
+    const { data, error } = await supabase
+      .from('interviews')
+      .select('*')
+      .eq('session_id', sessionId)
+      .eq('access_token', accessToken)
       .single();
 
     if (error) return null;
@@ -159,6 +176,20 @@ export class DatabaseService {
       .from('interviews')
       .update({
         rating,
+        rating_comment: comment ?? null,
+      })
+      .eq('id', interviewId);
+
+    if (error) throw error;
+  }
+
+  async updateInterviewRatingComment(
+    interviewId: string,
+    comment?: string | null
+  ): Promise<void> {
+    const { error } = await supabase
+      .from('interviews')
+      .update({
         rating_comment: comment ?? null,
       })
       .eq('id', interviewId);

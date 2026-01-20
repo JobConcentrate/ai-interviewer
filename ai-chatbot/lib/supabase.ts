@@ -29,6 +29,7 @@ export type Interview = {
   employer_id: string;
   role_id: string | null;
   role_label: string | null;
+  access_token: string | null;
   candidate_name: string | null;
   candidate_email: string | null;
   status: 'in_progress' | 'completed';

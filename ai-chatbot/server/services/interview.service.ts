@@ -12,7 +12,8 @@ export class InterviewService {
     employer?: string,
     token?: string,
     roleId?: string,
-    candidateEmail?: string
+    candidateEmail?: string,
+    accessToken?: string
   ): Promise<InterviewState> {
     if (!interviewStates.has(sessionId)) {
       const state = new InterviewState();
@@ -27,71 +28,88 @@ export class InterviewService {
     if (role && !state.role) state.role = role;
     if (employer && !state.employer) state.employer = employer;
 
-    if (token && !state.loadedFromDb) {
-      const employerRecord = await dbService.getOrCreateEmployer(
-        token,
-        employer ?? token
-      );
+    if (!state.loadedFromDb && (token || accessToken)) {
+      let interview = null;
 
-      if (!state.employer) state.employer = employerRecord.name;
-      state.employerId = employerRecord.id;
-
-      let interview = await dbService.getInterviewBySession(sessionId);
-
-      if (interview && interview.employer_id !== employerRecord.id) {
-        throw new Error("Session does not belong to this employer");
-      }
-
-      if (!interview) {
-        interview = await dbService.createInterview(
-          sessionId,
-          employerRecord.id,
-          roleId,
-          role
+      if (token) {
+        const employerRecord = await dbService.getOrCreateEmployer(
+          token,
+          employer ?? token
         );
-      } else {
-        if (roleId && interview.role_id && interview.role_id !== roleId) {
-          throw new Error("Session role does not match interview");
+
+        if (!state.employer) state.employer = employerRecord.name;
+        state.employerId = employerRecord.id;
+
+        interview = await dbService.getInterviewBySession(sessionId);
+
+        if (interview && interview.employer_id !== employerRecord.id) {
+          throw new Error("Session does not belong to this employer");
         }
 
-        const shouldUpdateRoleId = roleId && !interview.role_id;
-        const shouldUpdateRoleLabel = role && !interview.role_label;
-
-        if (shouldUpdateRoleId || shouldUpdateRoleLabel) {
-          await dbService.updateInterviewRole(
-            interview.id,
-            shouldUpdateRoleId ? roleId : undefined,
-            shouldUpdateRoleLabel ? role : undefined
+        if (!interview) {
+          interview = await dbService.createInterview(
+            sessionId,
+            employerRecord.id,
+            roleId,
+            role
           );
-          if (shouldUpdateRoleId) interview.role_id = roleId!;
-          if (shouldUpdateRoleLabel) interview.role_label = role!;
+        } else {
+          if (roleId && interview.role_id && interview.role_id !== roleId) {
+            throw new Error("Session role does not match interview");
+          }
+
+          const shouldUpdateRoleId = roleId && !interview.role_id;
+          const shouldUpdateRoleLabel = role && !interview.role_label;
+
+          if (shouldUpdateRoleId || shouldUpdateRoleLabel) {
+            await dbService.updateInterviewRole(
+              interview.id,
+              shouldUpdateRoleId ? roleId : undefined,
+              shouldUpdateRoleLabel ? role : undefined
+            );
+            if (shouldUpdateRoleId) interview.role_id = roleId!;
+            if (shouldUpdateRoleLabel) interview.role_label = role!;
+          }
+        }
+      } else if (accessToken) {
+        interview = await dbService.getInterviewBySessionAndAccessToken(
+          sessionId,
+          accessToken
+        );
+        if (!interview) {
+          throw new Error("Interview not found");
         }
       }
 
-      state.interviewId = interview.id;
-      if (interview.candidate_name && !state.candidateName) {
-        state.candidateName = interview.candidate_name;
-      }
-      if (interview.candidate_email && !state.candidateEmail) {
-        state.candidateEmail = interview.candidate_email;
-      }
-      state.ended = interview.status === "completed";
+      if (interview) {
+        state.interviewId = interview.id;
+        if (interview.role_label && !state.role) {
+          state.role = interview.role_label;
+        }
+        if (interview.candidate_name && !state.candidateName) {
+          state.candidateName = interview.candidate_name;
+        }
+        if (interview.candidate_email && !state.candidateEmail) {
+          state.candidateEmail = interview.candidate_email;
+        }
+        state.ended = interview.status === "completed";
 
-      const messages = await dbService.getMessagesByInterview(interview.id);
-      if (messages.length > 0 && state.history.length === 0) {
-        state.history = messages.map(m => ({ role: m.role, message: m.message }));
-      }
+        const messages = await dbService.getMessagesByInterview(interview.id);
+        if (messages.length > 0 && state.history.length === 0) {
+          state.history = messages.map(m => ({ role: m.role, message: m.message }));
+        }
 
-      const normalizedCandidateEmail = candidateEmail?.trim();
-      if (normalizedCandidateEmail && !state.candidateEmail) {
-        state.candidateEmail = normalizedCandidateEmail;
-        await dbService.updateInterviewCandidateEmail(
-          interview.id,
-          normalizedCandidateEmail
-        );
-      }
+        const normalizedCandidateEmail = candidateEmail?.trim();
+        if (normalizedCandidateEmail && !state.candidateEmail) {
+          state.candidateEmail = normalizedCandidateEmail;
+          await dbService.updateInterviewCandidateEmail(
+            interview.id,
+            normalizedCandidateEmail
+          );
+        }
 
-      state.loadedFromDb = true;
+        state.loadedFromDb = true;
+      }
     }
 
     return state;
@@ -104,7 +122,8 @@ export class InterviewService {
     employer?: string,
     token?: string,
     roleId?: string,
-    candidateEmail?: string
+    candidateEmail?: string,
+    accessToken?: string
   ): Promise<{ message: string; messages?: Message[]; ended: boolean }> {
     const state = await this.getState(
       sessionId,
@@ -112,7 +131,8 @@ export class InterviewService {
       employer,
       token,
       roleId,
-      candidateEmail
+      candidateEmail,
+      accessToken
     );
 
     /* ---------- INITIAL GREETING ---------- */
@@ -161,9 +181,10 @@ export class InterviewService {
 
     /* ---------- AI RESPONSE ---------- */
     const aiReply: AiReply = await openAiService.getReply(userMessage, state);
-    const aiMessage = aiReply.message.includes("INTERVIEW_ENDED")
-      ? aiReply.message.replace("INTERVIEW_ENDED", "").trim() +
-        "\n\nThe interview has concluded."
+    const aiMessage = aiReply.interviewEnded
+      ? (aiReply.message
+          ? `${aiReply.message}\n\nThe interview has concluded.`
+          : "The interview has concluded.")
       : aiReply.message;
 
     state.history.push({ role: "user", message: userMessage });
@@ -174,20 +195,13 @@ export class InterviewService {
     if (aiReply.questionAnswered) state.questionsAskedInStage++;
     this.advanceStageIfNeeded(state);
 
-    if (
-      aiReply.message.includes("INTERVIEW_ENDED") ||
-      state.currentStage >= InterviewStage.Ended
-    ) {
+    if (aiReply.interviewEnded || state.currentStage >= InterviewStage.Ended) {
       state.ended = true;
       if (state.interviewId) {
         await dbService.updateInterviewStatus(state.interviewId, "completed");
-        const rating = await openAiService.getInterviewRating(state);
-        if (rating) {
-          await dbService.updateInterviewRating(
-            state.interviewId,
-            rating.rating,
-            rating.comment || null
-          );
+        if (!state.ratingRequested) {
+          state.ratingRequested = true;
+          void this.generateRating(state);
         }
       }
       return {
@@ -218,6 +232,25 @@ export class InterviewService {
       state.currentStage++;
       state.questionsAskedInStage = 0;
     }
+  }
+
+  private async generateRating(state: InterviewState) {
+    if (!state.interviewId) return;
+
+    const rating = await openAiService.getInterviewRating(state);
+    if (rating) {
+      await dbService.updateInterviewRating(
+        state.interviewId,
+        rating.rating,
+        rating.comment || null
+      );
+      return;
+    }
+
+    await dbService.updateInterviewRatingComment(
+      state.interviewId,
+      "Failed to generate rating."
+    );
   }
 
   private extractCandidateName(input: string): string {

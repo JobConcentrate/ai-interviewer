@@ -5,7 +5,6 @@
 
 import { useSearchParams } from "next/navigation";
 import { useState, Suspense, useEffect } from "react";
-import { v4 as uuidv4 } from "uuid";
 import { Interview, InterviewMessage, Role } from "@/lib/supabase";
 import {
   fetchRoles,
@@ -15,6 +14,7 @@ import {
   fetchInterviews,
   fetchInterviewMessages,
   deleteInterview,
+  createInterviewSession,
 } from "@/lib/api";
 
 function AdminDashboardContent() {
@@ -90,7 +90,7 @@ function AdminDashboardContent() {
     }
   }, [activeTab, token]);
 
-  const loadRoles = async () => {
+  const loadRoles = async (attempt = 1) => {
     try {
       const data = await fetchRoles(token);
       if (data.roles) {
@@ -102,6 +102,11 @@ function AdminDashboardContent() {
       }
     } catch (error) {
       console.error("Error fetching roles:", error);
+      if (attempt < 3) {
+        setTimeout(() => loadRoles(attempt + 1), attempt * 800);
+      } else {
+        showEmailToast("error", "Failed to fetch roles");
+      }
     }
   };
 
@@ -251,26 +256,33 @@ function AdminDashboardContent() {
     }
   };
 
-  const generateInterviewLink = () => {
-    const sessionId = uuidv4();
-    // Find selected role object
+  const generateInterviewLink = async () => {
     const selectedRole = roles.find((r) => r.id === role);
     if (!selectedRole) {
-      alert("Role not found");
+      showEmailToast("error", "Role not found");
       return;
     }
 
-    const roleName = selectedRole.name;
+    try {
+      const data = await createInterviewSession(
+        token,
+        selectedRole.id,
+        selectedRole.name
+      );
 
-    const url =
-      `${window.location.origin}/room` +
-      `?sessionId=${sessionId}` +
-      `&role=${encodeURIComponent(roleName)}` +
-      `&roleId=${selectedRole.id}` +
-      `&token=${encodeURIComponent(String(token))}` +
-      `&employer=${encodeURIComponent(String(employer))}`;
+      const url =
+        `${window.location.origin}/room` +
+        `?sessionId=${data.sessionId}` +
+        `&role=${encodeURIComponent(selectedRole.name)}` +
+        `&roleId=${selectedRole.id}` +
+        `&employer=${encodeURIComponent(String(employer))}` +
+        `&accessToken=${encodeURIComponent(data.accessToken)}`;
 
-    setLink(url);
+      setLink(url);
+    } catch (error) {
+      console.error("Error creating interview link:", error);
+      showEmailToast("error", "Failed to create interview link");
+    }
   };
 
   const copyToClipboard = async () => {

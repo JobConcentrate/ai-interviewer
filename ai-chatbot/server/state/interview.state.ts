@@ -10,6 +10,7 @@ export enum InterviewStage {
 export type AiReply = {
   message: string;
   questionAnswered: boolean;
+  interviewEnded?: boolean;
 };
 
 export type InterviewRating = {
@@ -31,6 +32,7 @@ export class InterviewState {
   employer?: string;
   candidateName?: string;
   candidateEmail?: string;
+  ratingRequested = false;
   interviewId?: string;
   employerId?: string;
   loadedFromDb = false;

@@ -7,7 +7,8 @@ export async function sendInterviewMessage(
   employer?: string,
   token?: string,
   roleId?: string,
-  candidateEmail?: string
+  candidateEmail?: string,
+  accessToken?: string
 ) {
   const res = await fetch("/api/interview/message", {
     method: "POST",
@@ -20,6 +21,7 @@ export async function sendInterviewMessage(
       token,
       roleId,
       candidateEmail,
+      accessToken,
     })
   });
 
@@ -34,7 +36,8 @@ export async function fetchPreviousChat(
   employer?: string,
   token?: string,
   roleId?: string,
-  candidateEmail?: string
+  candidateEmail?: string,
+  accessToken?: string
 ) {
   const res = await fetch("/api/interview/message", {
     method: "POST",
@@ -47,6 +50,7 @@ export async function fetchPreviousChat(
       token,
       roleId,
       candidateEmail,
+      accessToken,
     })
   });
 
@@ -57,7 +61,9 @@ export async function fetchPreviousChat(
 
 // Admin Role API calls
 export async function fetchRoles(token: string): Promise<{ roles: Role[] }> {
-  const response = await fetch(`/api/admin/roles?token=${token}`);
+  const response = await fetch(
+    `/api/admin/roles?token=${encodeURIComponent(token)}`
+  );
   if (!response.ok) throw new Error("Failed to fetch roles");
   return response.json();
 }
@@ -108,6 +114,21 @@ export async function fetchInterviews(
 ): Promise<{ interviews: Interview[] }> {
   const response = await fetch(`/api/admin/interviews?token=${encodeURIComponent(token)}`);
   if (!response.ok) throw new Error("Failed to fetch interviews");
+  return response.json();
+}
+
+export async function createInterviewSession(
+  token: string,
+  roleId: string,
+  roleLabel: string
+): Promise<{ sessionId: string; accessToken: string }> {
+  const response = await fetch("/api/admin/interviews", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token, roleId, roleLabel }),
+  });
+
+  if (!response.ok) throw new Error("Failed to create interview");
   return response.json();
 }
 
