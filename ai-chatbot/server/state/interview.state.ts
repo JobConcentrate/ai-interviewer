@@ -29,6 +29,8 @@ export class InterviewState {
   history: HistoryItem[] = []
   role?: string;
   employer?: string;
+  candidateName?: string;
+  candidateEmail?: string;
   interviewId?: string;
   employerId?: string;
   loadedFromDb = false;

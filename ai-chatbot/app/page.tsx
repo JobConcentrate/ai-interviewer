@@ -1,4 +1,4 @@
-/* eslint-disable react-hooks/exhaustive-deps */
+﻿/* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable react-hooks/rules-of-hooks */
  
 "use client";
@@ -14,6 +14,7 @@ import {
   sendInterviewInvite,
   fetchInterviews,
   fetchInterviewMessages,
+  deleteInterview,
 } from "@/lib/api";
 
 function AdminDashboardContent() {
@@ -32,10 +33,19 @@ function AdminDashboardContent() {
   const [newRoleName, setNewRoleName] = useState("");
   const [newRoleDescription, setNewRoleDescription] = useState("");
   const [loading, setLoading] = useState(false);
+  const [deleteRoleConfirmId, setDeleteRoleConfirmId] = useState<string | null>(
+    null
+  );
+  const [deletingRoleId, setDeletingRoleId] = useState<string | null>(null);
 
   const [candidateEmail, setCandidateEmail] = useState("");
+  const [candidateEmailWasPasted, setCandidateEmailWasPasted] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [sending, setSending] = useState(false);
+  const [emailToast, setEmailToast] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
   const [interviews, setInterviews] = useState<Interview[]>([]);
   const [loadingInterviews, setLoadingInterviews] = useState(false);
   const [interviewsError, setInterviewsError] = useState<string | null>(null);
@@ -48,6 +58,12 @@ function AdminDashboardContent() {
   const [loadedMessagesByInterview, setLoadedMessagesByInterview] = useState<
     Record<string, boolean>
   >({});
+  const [deletingHistoryByInterview, setDeletingHistoryByInterview] = useState<
+    Record<string, boolean>
+  >({});
+  const [deleteConfirmInterviewId, setDeleteConfirmInterviewId] = useState<
+    string | null
+  >(null);
   const [messagesErrorByInterview, setMessagesErrorByInterview] = useState<
     Record<string, string>
   >({});
@@ -57,7 +73,7 @@ function AdminDashboardContent() {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <p className="text-red-600">
-          ❌ Missing {!token ? "token" : "employer name"}
+          âŒ Missing {!token ? "token" : "employer name"}
         </p>
       </div>
     );
@@ -100,6 +116,7 @@ function AdminDashboardContent() {
       setMessagesByInterview({});
       setLoadingMessagesByInterview({});
       setLoadedMessagesByInterview({});
+      setDeletingHistoryByInterview({});
       setMessagesErrorByInterview({});
     } catch (error) {
       console.error("Error fetching interviews:", error);
@@ -147,6 +164,54 @@ function AdminDashboardContent() {
     }
   };
 
+  const handleDeleteInterview = async (interviewId: string) => {
+    if (!token) return;
+
+    setDeletingHistoryByInterview((prev) => ({
+      ...prev,
+      [interviewId]: true,
+    }));
+    setMessagesErrorByInterview((prev) => ({
+      ...prev,
+      [interviewId]: "",
+    }));
+
+    try {
+      await deleteInterview(token, interviewId);
+      setInterviews((prev) => prev.filter((item) => item.id !== interviewId));
+      showEmailToast("success", "Interview deleted");
+      setMessagesByInterview((prev) => ({
+        ...prev,
+        [interviewId]: [],
+      }));
+      setLoadedMessagesByInterview((prev) => ({
+        ...prev,
+        [interviewId]: true,
+      }));
+      setLoadingMessagesByInterview((prev) => ({
+        ...prev,
+        [interviewId]: false,
+      }));
+      setMessagesErrorByInterview((prev) => ({
+        ...prev,
+        [interviewId]: "",
+      }));
+    } catch (error) {
+      console.error("Error deleting interview:", error);
+      showEmailToast("error", "Failed to delete interview");
+      setMessagesErrorByInterview((prev) => ({
+        ...prev,
+        [interviewId]: "Failed to delete interview",
+      }));
+    } finally {
+      setDeletingHistoryByInterview((prev) => ({
+        ...prev,
+        [interviewId]: false,
+      }));
+      setDeleteConfirmInterviewId(null);
+    }
+  };
+
   const handleCreateRole = async () => {
     if (!newRoleName.trim()) return;
 
@@ -156,24 +221,33 @@ function AdminDashboardContent() {
       setNewRoleName("");
       setNewRoleDescription("");
       await loadRoles();
-      alert("✅ Role created successfully");
+      showEmailToast("success", "Role created successfully");
     } catch (error) {
       console.error("Error creating role:", error);
-      alert("Failed to create role");
+      showEmailToast("error", "Failed to create role");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDeleteRole = async (roleId: string) => {
-    if (!confirm("Are you sure you want to delete this role?")) return;
+  const handleDeleteRole = (roleId: string) => {
+    setDeleteRoleConfirmId(roleId);
+  };
 
+  const handleConfirmDeleteRole = async () => {
+    if (!deleteRoleConfirmId) return;
+
+    setDeletingRoleId(deleteRoleConfirmId);
     try {
-      await deleteRole(roleId);
+      await deleteRole(deleteRoleConfirmId);
       await loadRoles();
+      showEmailToast("success", "Role deleted");
     } catch (error) {
       console.error("Error deleting role:", error);
-      alert("Failed to delete role");
+      showEmailToast("error", "Failed to delete role");
+    } finally {
+      setDeletingRoleId(null);
+      setDeleteRoleConfirmId(null);
     }
   };
 
@@ -206,18 +280,62 @@ function AdminDashboardContent() {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const showEmailToast = (type: "success" | "error", message: string) => {
+    setEmailToast({ type, message });
+    setTimeout(() => setEmailToast(null), 2500);
+  };
+
+  const isValidEmail = (value: string) => {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+  };
+
+  const handleOpenEmailConfirm = () => {
+    const trimmedEmail = candidateEmail.trim();
+    if (!trimmedEmail) return;
+    if (!isValidEmail(trimmedEmail)) {
+      showEmailToast("error", "Enter a valid email address");
+      return;
+    }
+    setShowConfirm(true);
+  };
+
+  const getCandidateEmailForRecord = (rawEmail: string) => {
+    const trimmed = rawEmail.trim();
+    if (!trimmed) return "";
+    return candidateEmailWasPasted ? "N/A" : trimmed;
+  };
+
+  const buildInviteLink = (baseLink: string, emailForRecord: string) => {
+    if (!emailForRecord) return baseLink;
+    try {
+      const url = new URL(baseLink);
+      url.searchParams.set("candidateEmail", emailForRecord);
+      return url.toString();
+    } catch {
+      return baseLink;
+    }
+  };
+
   const handleSendInvite = async () => {
-    if (!link || !candidateEmail) return;
+    const trimmedEmail = candidateEmail.trim();
+    if (!link || !trimmedEmail) return;
+    if (!isValidEmail(trimmedEmail)) {
+      showEmailToast("error", "Enter a valid email address");
+      return;
+    }
 
     setSending(true);
     try {
-      await sendInterviewInvite(candidateEmail, employer, link);
-      alert("✅ Email sent");
+      const emailForRecord = getCandidateEmailForRecord(trimmedEmail);
+      const inviteLink = buildInviteLink(link, emailForRecord);
+      await sendInterviewInvite(trimmedEmail, employer, inviteLink);
+      showEmailToast("success", "Email sent");
       setCandidateEmail("");
+      setCandidateEmailWasPasted(false);
       setShowConfirm(false);
     } catch (error) {
       console.error("Error sending invite:", error);
-      alert("❌ Failed to send email");
+      showEmailToast("error", "Failed to send email");
     } finally {
       setSending(false);
     }
@@ -378,12 +496,18 @@ function AdminDashboardContent() {
                             type="email"
                             placeholder="Candidate email"
                             value={candidateEmail}
-                            onChange={(e) => setCandidateEmail(e.target.value)}
+                            onChange={(e) => {
+                              setCandidateEmail(e.target.value);
+                              if (!e.target.value) {
+                                setCandidateEmailWasPasted(false);
+                              }
+                            }}
+                            onPaste={() => setCandidateEmailWasPasted(true)}
                             className="w-full border border-slate-300 rounded-lg px-4 py-2.5 text-sm text-black focus:outline-none focus:ring-2 focus:ring-slate-900"
                           />
                           <button
-                            onClick={() => setShowConfirm(true)}
-                            disabled={!candidateEmail}
+                            onClick={handleOpenEmailConfirm}
+                            disabled={!candidateEmail.trim()}
                             className="w-full bg-slate-800 text-white py-2.5 rounded-lg hover:bg-slate-700 transition-colors font-medium disabled:opacity-50"
                           >
                             Send Interview Link
@@ -583,18 +707,37 @@ function AdminDashboardContent() {
                                     Role: {roleName} | Session: {interview.session_id}
                                   </p>
                                   <p className="text-xs text-slate-500">
+                                    Email: {interview.candidate_email || "N/A"}
+                                  </p>
+                                  <p className="text-xs text-slate-500">
                                     Started: {startedAt ? new Date(startedAt).toLocaleString() : "Unknown"}
                                   </p>
                                 </div>
-                                <span
-                                  className={`text-xs px-2 py-1 rounded-full ${
-                                    interview.status === "completed"
-                                      ? "bg-emerald-100 text-emerald-700"
-                                      : "bg-amber-100 text-amber-700"
-                                  }`}
-                                >
-                                  {interview.status === "completed" ? "Completed" : "In progress"}
-                                </span>
+                                <div className="flex flex-col items-end gap-2">
+                                  <span
+                                    className={`text-xs px-2 py-1 rounded-full ${
+                                      interview.status === "completed"
+                                        ? "bg-emerald-100 text-emerald-700"
+                                        : "bg-amber-100 text-amber-700"
+                                    }`}
+                                  >
+                                    {interview.status === "completed" ? "Completed" : "In progress"}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={(event) => {
+                                      event.preventDefault();
+                                      event.stopPropagation();
+                                      setDeleteConfirmInterviewId(interview.id);
+                                    }}
+                                    disabled={deletingHistoryByInterview[interview.id]}
+                                    className="inline-flex items-center rounded-md border border-red-200 bg-red-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-red-700 hover:bg-red-100 disabled:opacity-50"
+                                  >
+                                    {deletingHistoryByInterview[interview.id]
+                                      ? "Deleting..."
+                                      : "Delete"}
+                                  </button>
+                                </div>
                               </div>
                             </summary>
 
@@ -669,9 +812,22 @@ function AdminDashboardContent() {
         )}
       </div>
 
-      {copied && (
-        <div className="fixed bottom-6 right-6 bg-slate-900 text-white px-4 py-2.5 rounded-lg text-sm shadow-lg">
-          ✅ Link copied to clipboard
+      {(copied || emailToast) && (
+        <div className="fixed bottom-6 right-6 space-y-2 z-50">
+          {copied && (
+            <div className="bg-slate-900 text-white px-4 py-2.5 rounded-lg text-sm shadow-lg">
+              Link copied to clipboard
+            </div>
+          )}
+          {emailToast && (
+            <div
+              className={`px-4 py-2.5 rounded-lg text-sm shadow-lg text-white ${
+                emailToast.type === "success" ? "bg-emerald-600" : "bg-red-600"
+              }`}
+            >
+              {emailToast.message}
+            </div>
+          )}
         </div>
       )}
 
@@ -701,6 +857,85 @@ function AdminDashboardContent() {
           </div>
         </div>
       )}
+
+      {deleteRoleConfirmId && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-md space-y-4">
+            <h3 className="text-lg font-semibold text-slate-900">
+              Delete Role
+            </h3>
+            <p className="text-sm text-slate-600">
+              This will permanently delete
+              {" "}
+              {roles.find((item) => item.id === deleteRoleConfirmId)?.name ||
+                "this role"}
+              .
+            </p>
+            <p className="text-sm text-red-600">
+              This action cannot be undone.
+            </p>
+            <div className="flex gap-3 pt-4">
+              <button
+                onClick={() => setDeleteRoleConfirmId(null)}
+                className="flex-1 border border-slate-300 rounded-lg py-2 text-sm text-black hover:bg-slate-100"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDeleteRole}
+                disabled={deletingRoleId === deleteRoleConfirmId}
+                className="flex-1 bg-red-600 text-white rounded-lg py-2 text-sm hover:bg-red-700 disabled:opacity-50"
+              >
+                {deletingRoleId === deleteRoleConfirmId
+                  ? "Deleting..."
+                  : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleteConfirmInterviewId && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-md space-y-4">
+            <h3 className="text-lg font-semibold text-slate-900">
+              Delete Interview
+            </h3>
+            <p className="text-sm text-slate-600">
+              This will remove the interview session and all chat messages for
+              {" "}
+              {interviews.find((item) => item.id === deleteConfirmInterviewId)
+                ?.candidate_name || "this candidate"}
+              .
+            </p>
+            <p className="text-sm text-red-600">
+              This action cannot be undone.
+            </p>
+            <div className="flex gap-3 pt-4">
+              <button
+                onClick={() => setDeleteConfirmInterviewId(null)}
+                className="flex-1 border border-slate-300 rounded-lg py-2 text-sm text-black hover:bg-slate-100"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() =>
+                  deleteConfirmInterviewId &&
+                  handleDeleteInterview(deleteConfirmInterviewId)
+                }
+                disabled={
+                  !!deletingHistoryByInterview[deleteConfirmInterviewId]
+                }
+                className="flex-1 bg-red-600 text-white rounded-lg py-2 text-sm hover:bg-red-700 disabled:opacity-50"
+              >
+                {deletingHistoryByInterview[deleteConfirmInterviewId]
+                  ? "Deleting..."
+                  : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
@@ -718,3 +953,8 @@ export default function AdminDashboard() {
     </Suspense>
   );
 }
+
+
+
+
+

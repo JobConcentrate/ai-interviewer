@@ -178,6 +178,18 @@ export class DatabaseService {
     if (error) throw error;
   }
 
+  async updateInterviewCandidateEmail(
+    interviewId: string,
+    candidateEmail: string
+  ): Promise<void> {
+    const { error } = await supabase
+      .from('interviews')
+      .update({ candidate_email: candidateEmail })
+      .eq('id', interviewId);
+
+    if (error) throw error;
+  }
+
   async updateInterviewRole(
     interviewId: string,
     roleId?: string | null,
@@ -227,6 +239,24 @@ export class DatabaseService {
 
     if (error) throw error;
     return data || [];
+  }
+
+  async deleteMessagesByInterview(interviewId: string): Promise<void> {
+    const { error } = await supabase
+      .from('interview_messages')
+      .delete()
+      .eq('interview_id', interviewId);
+
+    if (error) throw error;
+  }
+
+  async deleteInterview(interviewId: string): Promise<void> {
+    const { error } = await supabase
+      .from('interviews')
+      .delete()
+      .eq('id', interviewId);
+
+    if (error) throw error;
   }
 }
 

@@ -11,7 +11,8 @@ export class InterviewService {
     role?: string,
     employer?: string,
     token?: string,
-    roleId?: string
+    roleId?: string,
+    candidateEmail?: string
   ): Promise<InterviewState> {
     if (!interviewStates.has(sessionId)) {
       const state = new InterviewState();
@@ -68,11 +69,26 @@ export class InterviewService {
       }
 
       state.interviewId = interview.id;
+      if (interview.candidate_name && !state.candidateName) {
+        state.candidateName = interview.candidate_name;
+      }
+      if (interview.candidate_email && !state.candidateEmail) {
+        state.candidateEmail = interview.candidate_email;
+      }
       state.ended = interview.status === "completed";
 
       const messages = await dbService.getMessagesByInterview(interview.id);
       if (messages.length > 0 && state.history.length === 0) {
         state.history = messages.map(m => ({ role: m.role, message: m.message }));
+      }
+
+      const normalizedCandidateEmail = candidateEmail?.trim();
+      if (normalizedCandidateEmail && !state.candidateEmail) {
+        state.candidateEmail = normalizedCandidateEmail;
+        await dbService.updateInterviewCandidateEmail(
+          interview.id,
+          normalizedCandidateEmail
+        );
       }
 
       state.loadedFromDb = true;
@@ -87,15 +103,27 @@ export class InterviewService {
     role?: string,
     employer?: string,
     token?: string,
-    roleId?: string
+    roleId?: string,
+    candidateEmail?: string
   ): Promise<{ message: string; messages?: Message[]; ended: boolean }> {
-    const state = await this.getState(sessionId, role, employer, token, roleId);
+    const state = await this.getState(
+      sessionId,
+      role,
+      employer,
+      token,
+      roleId,
+      candidateEmail
+    );
 
     /* ---------- INITIAL GREETING ---------- */
     if (state.history.length === 0 && !userMessage) {
-      const greeting = `Hello! Welcome to your interview with ${
-        state.employer ?? "our company"
-      }. Are you ready to begin?`;
+      const greeting = state.candidateName
+        ? `Hello ${state.candidateName}! Welcome to your interview with ${
+            state.employer ?? "our company"
+          }. Are you ready to begin?`
+        : `Hello! Welcome to your interview with ${
+            state.employer ?? "our company"
+          }. To get started, what is your full name?`;
 
       state.history.push({ role: "assistant", message: greeting });
       await this.persistMessage(state, "assistant", greeting);
@@ -104,7 +132,19 @@ export class InterviewService {
 
     /* ---------- INTRO ---------- */
     if (state.history.length === 1 && userMessage) {
-      const intro = "Great. Could you briefly introduce yourself?";
+      const candidateName = this.extractCandidateName(userMessage);
+      if (candidateName && !state.candidateName) {
+        state.candidateName = candidateName;
+        if (state.interviewId) {
+          await dbService.updateInterviewCandidateName(
+            state.interviewId,
+            candidateName
+          );
+        }
+      }
+      const intro = state.candidateName
+        ? `Thanks, ${state.candidateName}. Could you briefly introduce yourself?`
+        : "Thanks. Could you briefly introduce yourself?";
       state.history.push({ role: "user", message: userMessage });
       state.history.push({ role: "assistant", message: intro });
       await this.persistMessage(state, "user", userMessage);
@@ -178,6 +218,33 @@ export class InterviewService {
       state.currentStage++;
       state.questionsAskedInStage = 0;
     }
+  }
+
+  private extractCandidateName(input: string): string {
+    const trimmed = input.trim().replace(/\s+/g, " ");
+    if (!trimmed) return "";
+
+    const prefixes = [
+      /^my name is\s+/i,
+      /^i am\s+/i,
+      /^i'm\s+/i,
+      /^this is\s+/i,
+      /^its\s+/i,
+      /^it's\s+/i,
+    ];
+
+    let name = trimmed;
+    for (const prefix of prefixes) {
+      if (prefix.test(name)) {
+        name = name.replace(prefix, "");
+        break;
+      }
+    }
+
+    name = name.replace(/[,.;!?].*$/, "").trim();
+
+    if (!name) return trimmed;
+    return name.length > 80 ? name.slice(0, 80) : name;
   }
 
   private getStagePrompt(state: InterviewState): string {

@@ -13,6 +13,7 @@ export default function Chat() {
   const urlEmployer = searchParams.get("employer") ?? undefined;
   const urlToken = searchParams.get("token") ?? undefined;
   const urlRoleId = searchParams.get("roleId") ?? undefined;
+  const urlCandidateEmail = searchParams.get("candidateEmail") ?? undefined;
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -28,12 +29,27 @@ export default function Chat() {
 
     const loadPreviousChat = async () => {
       try {
-        const data = await fetchPreviousChat(sid, urlRole, urlEmployer, urlToken, urlRoleId);
+        const data = await fetchPreviousChat(
+          sid,
+          urlRole,
+          urlEmployer,
+          urlToken,
+          urlRoleId,
+          urlCandidateEmail
+        );
         if (data.messages) setMessages(data.messages);
         if (data.ended) setEnded(true);
 
         if (!data.messages || data.messages.length === 0) {
-          const intro = await sendInterviewMessage("", sid, urlRole, urlEmployer, urlToken, urlRoleId);
+          const intro = await sendInterviewMessage(
+            "",
+            sid,
+            urlRole,
+            urlEmployer,
+            urlToken,
+            urlRoleId,
+            urlCandidateEmail
+          );
           if (intro.message) setMessages([{ role: "ai", content: intro.message }]);
         }
       } catch (err) {
@@ -42,7 +58,7 @@ export default function Chat() {
     };
 
     loadPreviousChat();
-  }, [urlSessionId, urlRole, urlEmployer, urlToken, urlRoleId]);
+  }, [urlSessionId, urlRole, urlEmployer, urlToken, urlRoleId, urlCandidateEmail]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -57,7 +73,15 @@ export default function Chat() {
     setLoading(true);
 
     try {
-      const data = await sendInterviewMessage(input, sessionId, urlRole, urlEmployer, urlToken, urlRoleId);
+      const data = await sendInterviewMessage(
+        input,
+        sessionId,
+        urlRole,
+        urlEmployer,
+        urlToken,
+        urlRoleId,
+        urlCandidateEmail
+      );
       if (data.message) setMessages(prev => [...prev, { role: "ai", content: data.message }]);
       if (data.ended) setEnded(true);
     } catch (err) {

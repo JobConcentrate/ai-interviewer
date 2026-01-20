@@ -30,6 +30,7 @@ export type Interview = {
   role_id: string | null;
   role_label: string | null;
   candidate_name: string | null;
+  candidate_email: string | null;
   status: 'in_progress' | 'completed';
   rating: number | null;
   rating_comment: string | null;

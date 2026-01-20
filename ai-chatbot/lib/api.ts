@@ -6,12 +6,21 @@ export async function sendInterviewMessage(
   role?: string,
   employer?: string,
   token?: string,
-  roleId?: string
+  roleId?: string,
+  candidateEmail?: string
 ) {
   const res = await fetch("/api/interview/message", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message, sessionId, role, employer, token, roleId })
+    body: JSON.stringify({
+      message,
+      sessionId,
+      role,
+      employer,
+      token,
+      roleId,
+      candidateEmail,
+    })
   });
 
   if (!res.ok) throw new Error("API error");
@@ -24,12 +33,21 @@ export async function fetchPreviousChat(
   role?: string,
   employer?: string,
   token?: string,
-  roleId?: string
+  roleId?: string,
+  candidateEmail?: string
 ) {
   const res = await fetch("/api/interview/message", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message: "", sessionId, role, employer, token, roleId })
+    body: JSON.stringify({
+      message: "",
+      sessionId,
+      role,
+      employer,
+      token,
+      roleId,
+      candidateEmail,
+    })
   });
 
   if (!res.ok) throw new Error("Failed to fetch previous chat");
@@ -93,6 +111,19 @@ export async function fetchInterviews(
   return response.json();
 }
 
+export async function deleteInterview(
+  token: string,
+  interviewId: string
+): Promise<{ success: boolean }> {
+  const response = await fetch(
+    `/api/admin/interviews?token=${encodeURIComponent(token)}&interviewId=${encodeURIComponent(interviewId)}`,
+    { method: "DELETE" }
+  );
+
+  if (!response.ok) throw new Error("Failed to delete interview");
+  return response.json();
+}
+
 export async function fetchInterviewMessages(
   token: string,
   interviewId: string
@@ -101,5 +132,18 @@ export async function fetchInterviewMessages(
     `/api/admin/interview-messages?token=${encodeURIComponent(token)}&interviewId=${encodeURIComponent(interviewId)}`
   );
   if (!response.ok) throw new Error("Failed to fetch interview messages");
+  return response.json();
+}
+
+export async function deleteInterviewHistory(
+  token: string,
+  interviewId: string
+): Promise<{ success: boolean }> {
+  const response = await fetch(
+    `/api/admin/interview-messages?token=${encodeURIComponent(token)}&interviewId=${encodeURIComponent(interviewId)}`,
+    { method: "DELETE" }
+  );
+
+  if (!response.ok) throw new Error("Failed to delete interview messages");
   return response.json();
 }

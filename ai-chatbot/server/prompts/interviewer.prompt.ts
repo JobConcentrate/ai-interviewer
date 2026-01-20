@@ -16,6 +16,7 @@ Interview stages:
 5. Candidate Q&A
 
 Candidate role: ${state.role ?? "Unknown"}
+Candidate name: ${state.candidateName ?? "Unknown"}
 
 --- COMPANY CONTEXT ---
 Company Name: ${state.employer ?? "Unknown Company"}
