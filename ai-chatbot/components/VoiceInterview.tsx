@@ -1,10 +1,10 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { v4 as uuidv4 } from "uuid";
 import { fetchPreviousChat, sendInterviewMessage } from "@/lib/api";
-import { Message } from "../server/state/interview.state";
+import type { Message } from "../server/state/interview.state";
 
 type VoiceSupport = {
   recognition: boolean;
@@ -29,16 +29,20 @@ export default function VoiceInterview() {
   const [listening, setListening] = useState(false);
   const [speaking, setSpeaking] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [language, setLanguage] = useState<"en" | "zh" | null>(null);
+  const [languageLocked, setLanguageLocked] = useState(false);
+  const [languageChecked, setLanguageChecked] = useState(false);
   const [voiceSupport, setVoiceSupport] = useState<VoiceSupport>({
     recognition: false,
     synthesis: false,
   });
 
   const recognitionRef = useRef<any>(null);
-  const bottomRef = useRef<HTMLDivElement>(null);
-
-  const isVoiceSupported =
-    voiceSupport.recognition && voiceSupport.synthesis;
+  const isVoiceSupported = voiceSupport.recognition && voiceSupport.synthesis;
+  const languageCode = language === "zh" ? "zh-CN" : "en-US";
+  const languageStorageKey = sessionId
+    ? `ai-interviewer-language:${sessionId}`
+    : "ai-interviewer-language";
 
   const getSpeechRecognition = () => {
     if (typeof window === "undefined") return null;
@@ -48,10 +52,12 @@ export default function VoiceInterview() {
     if (!SpeechRecognition) return null;
     if (!recognitionRef.current) {
       recognitionRef.current = new SpeechRecognition();
-      recognitionRef.current.lang = "en-US";
       recognitionRef.current.interimResults = false;
       recognitionRef.current.continuous = false;
       recognitionRef.current.maxAlternatives = 1;
+    }
+    if (language) {
+      recognitionRef.current.lang = languageCode;
     }
     return recognitionRef.current;
   };
@@ -110,6 +116,9 @@ export default function VoiceInterview() {
     if (!voiceSupport.synthesis) return;
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
+    if (language) {
+      utterance.lang = languageCode;
+    }
     setSpeaking(true);
     utterance.onend = () => {
       setSpeaking(false);
@@ -142,7 +151,9 @@ export default function VoiceInterview() {
         urlToken,
         urlRoleId,
         urlCandidateEmail,
-        urlAccessToken
+        urlAccessToken,
+        undefined,
+        language ?? undefined
       );
       if (data.message) {
         setMessages((prev) => [...prev, { role: "ai", content: data.message }]);
@@ -187,7 +198,8 @@ export default function VoiceInterview() {
         urlRoleId,
         urlCandidateEmail,
         urlAccessToken,
-        true
+        true,
+        language ?? undefined
       );
       const history = data.messages ?? [];
       setMessages(history);
@@ -206,7 +218,8 @@ export default function VoiceInterview() {
           urlRoleId,
           urlCandidateEmail,
           urlAccessToken,
-          true
+          true,
+          language ?? undefined
         );
         if (intro.message) {
           setMessages([{ role: "ai", content: intro.message }]);
@@ -237,7 +250,7 @@ export default function VoiceInterview() {
   };
 
   const handleReady = async () => {
-    if (!sessionId || started || !isVoiceSupported) return;
+    if (!sessionId || started || !isVoiceSupported || !language) return;
     setError(null);
     const permissionOk = await requestMicPermission();
     if (!permissionOk) return;
@@ -245,10 +258,36 @@ export default function VoiceInterview() {
     await bootstrapInterview();
   };
 
+  const handleSelectLanguage = (value: "en" | "zh") => {
+    if (languageLocked) return;
+    setLanguage(value);
+    setLanguageLocked(true);
+  };
+
   useEffect(() => {
     const sid = urlSessionId ?? uuidv4();
     setSessionId(sid);
+    setLanguage(null);
+    setLanguageLocked(false);
+    setLanguageChecked(false);
   }, [urlSessionId]);
+
+  useEffect(() => {
+    if (!sessionId) return;
+    if (typeof window === "undefined") return;
+    const saved = window.localStorage.getItem(languageStorageKey);
+    if (saved === "en" || saved === "zh") {
+      setLanguage(saved);
+      setLanguageLocked(true);
+    }
+    setLanguageChecked(true);
+  }, [sessionId, languageStorageKey]);
+
+  useEffect(() => {
+    if (!sessionId || !language) return;
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(languageStorageKey, language);
+  }, [sessionId, language, languageStorageKey]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -261,8 +300,12 @@ export default function VoiceInterview() {
   }, []);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, loading, listening]);
+    if (!language) return;
+    const recognition = recognitionRef.current;
+    if (recognition) {
+      recognition.lang = languageCode;
+    }
+  }, [language, languageCode]);
 
   useEffect(() => {
     return () => {
@@ -295,129 +338,131 @@ export default function VoiceInterview() {
     ? "Waiting for your response"
     : "Ready to start";
 
+  const waveActive = (speaking || listening) && !ended;
+  const waveColor = speaking
+    ? "bg-amber-400"
+    : listening
+    ? "bg-emerald-400"
+    : loading
+    ? "bg-blue-400"
+    : "bg-slate-600";
+
   return (
-    <div className="w-full bg-white rounded-xl shadow-lg flex flex-col overflow-hidden border border-slate-200">
-      <div className="px-6 py-4 border-b bg-slate-900">
-        <h1 className="text-lg font-semibold text-slate-100">
-          Voice Interview
-        </h1>
-        <p className="text-sm text-slate-300">
-          Answer out loud. We will speak each question to you.
-        </p>
+    <div className="min-h-screen w-full bg-slate-950 text-white flex flex-col">
+      <div className="px-6 py-5 border-b border-slate-800 flex items-center justify-between">
+        <div>
+          <h1 className="text-base font-semibold">Voice Call</h1>
+          <p className="text-xs text-slate-300">AI Interviewer</p>
+        </div>
+        <div className="flex items-center gap-2 text-xs text-slate-300">
+          <span
+            className={`h-2 w-2 rounded-full ${
+              ended
+                ? "bg-slate-500"
+                : listening
+                ? "bg-emerald-400"
+                : speaking
+                ? "bg-amber-400"
+                : loading
+                ? "bg-blue-400"
+                : "bg-slate-400"
+            }`}
+          />
+          <span>{statusText}</span>
+        </div>
       </div>
 
-      <div className="p-6 space-y-6">
+      <div className="flex-1 p-6 flex flex-col items-center justify-center text-center gap-8">
+        <div className="h-28 w-28 rounded-full bg-slate-800 flex items-center justify-center text-2xl font-semibold">
+          AI
+        </div>
+
+        <div className={`voice-wave ${waveActive ? "active" : ""}`}>
+          <div className={`voice-bar ${waveColor}`} />
+          <div className={`voice-bar ${waveColor}`} />
+          <div className={`voice-bar ${waveColor}`} />
+          <div className={`voice-bar ${waveColor}`} />
+          <div className={`voice-bar ${waveColor}`} />
+        </div>
+
         {!started ? (
-          <div className="space-y-4">
-            <p className="text-sm text-slate-600">
-              When you are ready, press the button to start the voice interview.
-              Microphone access will be requested.
+          <div className="space-y-4 w-full max-w-sm">
+            <p className="text-sm text-slate-300">
+              Tap to start the call. Microphone access is required.
             </p>
-            {!isVoiceSupported && (
-              <div className="text-sm text-red-600">
-                Voice interviews are not supported in this browser. Use the
-                chat interview link instead.
+            {!language && !languageChecked && (
+              <p className="text-sm text-slate-400">Checking saved language...</p>
+            )}
+            {!language && languageChecked && (
+              <div className="flex gap-3">
+                <button
+                  onClick={() => handleSelectLanguage("en")}
+                  className={`flex-1 rounded-full border px-4 py-2 text-sm font-medium transition-colors ${
+                    language === "en"
+                      ? "border-emerald-400 text-emerald-200"
+                      : "border-slate-700 text-slate-300 hover:border-slate-500"
+                  }`}
+                  aria-pressed={language === "en"}
+                >
+                  English
+                </button>
+                <button
+                  onClick={() => handleSelectLanguage("zh")}
+                  className={`flex-1 rounded-full border px-4 py-2 text-sm font-medium transition-colors ${
+                    language === "zh"
+                      ? "border-emerald-400 text-emerald-200"
+                      : "border-slate-700 text-slate-300 hover:border-slate-500"
+                  }`}
+                  aria-pressed={language === "zh"}
+                >
+                  Chinese
+                </button>
               </div>
             )}
-            {error && (
-              <div className="text-sm text-red-600">{error}</div>
+            {language && (
+              <p className="text-xs text-slate-400">
+                Language locked: {language === "zh" ? "Chinese" : "English"}
+              </p>
             )}
+            {!isVoiceSupported && (
+              <div className="text-sm text-rose-300">
+                Voice calls are not supported in this browser. Use the chat
+                interview link instead.
+              </div>
+            )}
+            {error && <div className="text-sm text-rose-300">{error}</div>}
             <button
               onClick={handleReady}
-              disabled={!isVoiceSupported || !sessionId}
-              className="w-full bg-slate-900 text-white py-3 rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={!isVoiceSupported || !sessionId || !language}
+              className="w-full bg-emerald-500 text-slate-950 py-3 rounded-full text-sm font-semibold hover:bg-emerald-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              I am ready
+              Start call
             </button>
           </div>
         ) : (
-          <>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm text-slate-600">
-                <span
-                  className={`h-2 w-2 rounded-full ${
-                    ended
-                      ? "bg-slate-400"
-                      : listening
-                      ? "bg-emerald-500"
-                      : speaking
-                      ? "bg-amber-500"
-                      : loading
-                      ? "bg-blue-500"
-                      : "bg-slate-300"
-                  }`}
-                />
-                <span>{statusText}</span>
-              </div>
-              {ended && (
-                <span className="text-xs uppercase tracking-wide text-slate-500">
-                  Ended
-                </span>
-              )}
-            </div>
-
-            {error && (
-              <div className="text-sm text-red-600">{error}</div>
-            )}
-
-            <div className="space-y-2">
-              <h2 className="text-sm font-medium text-slate-700">Transcript</h2>
-              <div className="max-h-[360px] overflow-y-auto border border-slate-200 rounded-lg bg-slate-50 p-4 space-y-4">
-                {messages.length === 0 && !loading && (
-                  <p className="text-sm text-slate-500">
-                    Waiting for the interviewer...
-                  </p>
-                )}
-                {messages.map((message, index) => (
-                  <div
-                    key={index}
-                    className={`flex ${
-                      message.role === "user"
-                        ? "justify-end"
-                        : "justify-start"
-                    }`}
-                  >
-                    <div
-                      className={`max-w-[80%] px-4 py-2 rounded-lg text-sm leading-relaxed ${
-                        message.role === "user"
-                          ? "bg-slate-900 text-white"
-                          : "bg-white text-slate-900 border border-slate-200"
-                      }`}
-                    >
-                      {message.content}
-                    </div>
-                  </div>
-                ))}
-                {loading && (
-                  <div className="flex justify-start">
-                    <div className="bg-white border border-slate-200 px-4 py-2 rounded-lg text-sm text-slate-500">
-                      Interviewer is thinking...
-                    </div>
-                  </div>
-                )}
-                <div ref={bottomRef} />
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              <button
-                onClick={
-                  listening ? stopListening : () => startListening()
-                }
-                disabled={loading || speaking || ended}
-                className={`w-full py-3 rounded-lg text-sm font-medium transition-colors ${
-                  listening
-                    ? "bg-emerald-600 text-white hover:bg-emerald-700"
-                    : "bg-slate-900 text-white hover:bg-slate-800"
-                } disabled:opacity-50 disabled:cursor-not-allowed`}
-              >
-                {listening ? "Listening... tap to stop" : "Start answer"}
-              </button>
-              <p className="text-xs text-slate-500">
-                Speak clearly. Tap the button again if you want to retry.
+          <div className="space-y-4 w-full max-w-sm">
+            <p className="text-sm text-slate-300">{statusText}</p>
+            {ended && (
+              <p className="text-xs uppercase tracking-wide text-slate-400">
+                Call ended
               </p>
-            </div>
-          </>
+            )}
+            {error && <div className="text-sm text-rose-300">{error}</div>}
+            <button
+              onClick={listening ? stopListening : () => startListening()}
+              disabled={loading || speaking || ended}
+              className={`w-full py-3 rounded-full text-sm font-semibold transition-colors ${
+                listening
+                  ? "bg-rose-500 text-white hover:bg-rose-400"
+                  : "bg-emerald-500 text-slate-950 hover:bg-emerald-400"
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
+            >
+              {listening ? "Stop talking" : "Start talking"}
+            </button>
+            <p className="text-xs text-slate-400">
+              Speak when prompted. Tap to stop if needed.
+            </p>
+          </div>
         )}
       </div>
     </div>

@@ -69,6 +69,36 @@ export class DatabaseService {
     if (error) throw error;
   }
 
+  async updateRole(
+    roleId: string,
+    name?: string,
+    description?: string
+  ): Promise<Role> {
+    const updates: { name?: string; description?: string | null } = {};
+    if (typeof name === "string" && name.trim()) {
+      updates.name = name.trim();
+    }
+    if (typeof description === "string") {
+      updates.description = description.trim() || null;
+    }
+
+    if (Object.keys(updates).length === 0) {
+      const existing = await this.getRoleById(roleId);
+      if (!existing) throw new Error("Role not found");
+      return existing;
+    }
+
+    const { data, error } = await supabase
+      .from('roles')
+      .update(updates)
+      .eq('id', roleId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data!;
+  }
+
   async getRoleById(roleId: string): Promise<Role | null> {
     const { data, error } = await supabase
       .from('roles')
@@ -184,14 +214,30 @@ export class DatabaseService {
   async updateInterviewRating(
     interviewId: string,
     rating: number,
-    comment?: string | null
+    comment?: string | null,
+    languageRating?: number | null,
+    languageComment?: string | null
   ): Promise<void> {
+    const updates: {
+      rating?: number;
+      rating_comment?: string | null;
+      language_rating?: number | null;
+      language_rating_comment?: string | null;
+    } = {
+      rating,
+      rating_comment: comment ?? null,
+    };
+
+    if (languageRating !== undefined) {
+      updates.language_rating = languageRating;
+    }
+    if (languageComment !== undefined) {
+      updates.language_rating_comment = languageComment ?? null;
+    }
+
     const { error } = await supabase
       .from('interviews')
-      .update({
-        rating,
-        rating_comment: comment ?? null,
-      })
+      .update(updates)
       .eq('id', interviewId);
 
     if (error) throw error;
@@ -205,6 +251,7 @@ export class DatabaseService {
       .from('interviews')
       .update({
         rating_comment: comment ?? null,
+        language_rating_comment: comment ?? null,
       })
       .eq('id', interviewId);
 

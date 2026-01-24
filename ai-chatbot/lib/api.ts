@@ -9,7 +9,8 @@ export async function sendInterviewMessage(
   roleId?: string,
   candidateEmail?: string,
   accessToken?: string,
-  startInterview?: boolean
+  startInterview?: boolean,
+  language?: string
 ) {
   const res = await fetch("/api/interview/message", {
     method: "POST",
@@ -24,6 +25,7 @@ export async function sendInterviewMessage(
       candidateEmail,
       accessToken,
       startInterview,
+      language,
     })
   });
 
@@ -40,7 +42,8 @@ export async function fetchPreviousChat(
   roleId?: string,
   candidateEmail?: string,
   accessToken?: string,
-  startInterview?: boolean
+  startInterview?: boolean,
+  language?: string
 ) {
   const res = await fetch("/api/interview/message", {
     method: "POST",
@@ -55,6 +58,7 @@ export async function fetchPreviousChat(
       candidateEmail,
       accessToken,
       startInterview,
+      language,
     })
   });
 
@@ -75,7 +79,7 @@ export async function fetchRoles(token: string): Promise<{ roles: Role[] }> {
 export async function createRole(
   token: string,
   name: string,
-  description: string
+  description?: string
 ): Promise<{ role: Role }> {
   const response = await fetch("/api/admin/roles", {
     method: "POST",
@@ -83,6 +87,20 @@ export async function createRole(
     body: JSON.stringify({ token, name, description }),
   });
   if (!response.ok) throw new Error("Failed to create role");
+  return response.json();
+}
+
+export async function updateRole(
+  token: string,
+  roleId: string,
+  updates: { name?: string; description?: string }
+): Promise<{ role: Role }> {
+  const response = await fetch("/api/admin/roles", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token, roleId, ...updates }),
+  });
+  if (!response.ok) throw new Error("Failed to update role");
   return response.json();
 }
 

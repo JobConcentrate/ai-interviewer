@@ -8,6 +8,69 @@ import {
 } from "../state/interview.state";
 
 export class OpenAiService {
+  async generateRoleDescription(
+    roleName: string,
+    employer?: string
+  ): Promise<string | null> {
+    const systemPrompt = [
+      "You write concise job role descriptions.",
+      "Return strict JSON only: {\"description\": \"...\"}.",
+      "Keep it professional and specific.",
+      "Max 300 characters.",
+    ].join(" ");
+
+    const userPrompt = employer
+      ? `Role: ${roleName}\nCompany: ${employer}`
+      : `Role: ${roleName}`;
+
+    const messages: { role: string; content: string }[] = [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt },
+      { role: "user", content: "Provide the JSON now." },
+    ];
+
+    try {
+      const res = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-4.1-mini",
+          messages,
+          temperature: 0.3,
+        }),
+      });
+
+      const json: OpenAiResponse & { error?: { message: string } } =
+        await res.json();
+
+      if (json.error) return null;
+      if (!json.choices || !Array.isArray(json.choices) || json.choices.length === 0) {
+        return null;
+      }
+
+      const content: string = json.choices[0].message?.content ?? "";
+      const trimmed = content
+        .trim()
+        .replace(/^```json/i, "")
+        .replace(/^```/i, "")
+        .replace(/```$/i, "")
+        .trim();
+      const start = trimmed.indexOf("{");
+      const end = trimmed.lastIndexOf("}");
+      const jsonText = start >= 0 && end > start ? trimmed.slice(start, end + 1) : trimmed;
+      const parsed = JSON.parse(jsonText) as { description?: string };
+      const description =
+        typeof parsed.description === "string" ? parsed.description.trim() : "";
+      if (!description) return null;
+      return description.slice(0, 300);
+    } catch {
+      return null;
+    }
+  }
+
   async getReply(message: string, state: InterviewState): Promise<AiReply> {
     const messages: { role: string; content: string }[] = [
       { role: "system", content: buildInterviewerPrompt(state) },
@@ -89,12 +152,16 @@ export class OpenAiService {
   private async requestInterviewRating(
     state: InterviewState
   ): Promise<InterviewRating | null> {
+    const languageLabel =
+      state.language === "zh" ? "Chinese (Simplified)" : "English";
     const systemPrompt = [
       "You are an interview evaluator.",
       "Review the full transcript and assign a performance rating.",
-      "Return strict JSON only: {\"rating\": number, \"comment\": \"...\"}.",
+      `Also rate the candidate's language skill in ${languageLabel}.`,
+      "Return strict JSON only: {\"rating\": number, \"comment\": \"...\", \"language_rating\": number, \"language_comment\": \"...\"}.",
       "Rating must be an integer from 1 to 10.",
-      "Comment must be concise (max 240 characters) and mention strengths and weaknesses.",
+      "Language rating must be an integer from 1 to 10.",
+      "Comments must be concise (max 240 characters) and mention strengths and weaknesses.",
     ].join(" ");
 
     const messages: { role: string; content: string }[] = [
@@ -145,7 +212,14 @@ export class OpenAiService {
     const jsonText = start >= 0 && end > start ? trimmed.slice(start, end + 1) : trimmed;
 
     try {
-      const parsed = JSON.parse(jsonText) as { rating?: number | string; comment?: string };
+      const parsed = JSON.parse(jsonText) as {
+        rating?: number | string;
+        comment?: string;
+        language_rating?: number | string;
+        languageRating?: number | string;
+        language_comment?: string;
+        languageComment?: string;
+      };
       const rawRating = typeof parsed.rating === "number" ? parsed.rating : Number.parseInt(String(parsed.rating), 10);
       if (!Number.isFinite(rawRating)) return null;
 
@@ -153,7 +227,33 @@ export class OpenAiService {
       const comment = typeof parsed.comment === "string" ? parsed.comment.trim() : "";
       const normalizedComment = comment.slice(0, 240);
 
-      return { rating, comment: normalizedComment };
+      const rawLanguageRating =
+        typeof parsed.language_rating === "number"
+          ? parsed.language_rating
+          : typeof parsed.languageRating === "number"
+          ? parsed.languageRating
+          : Number.parseInt(
+              String(parsed.language_rating ?? parsed.languageRating ?? ""),
+              10
+            );
+
+      const languageRating = Number.isFinite(rawLanguageRating)
+        ? Math.min(10, Math.max(1, Math.round(rawLanguageRating)))
+        : undefined;
+      const languageCommentRaw =
+        typeof parsed.language_comment === "string"
+          ? parsed.language_comment
+          : typeof parsed.languageComment === "string"
+          ? parsed.languageComment
+          : "";
+      const languageComment = languageCommentRaw.trim().slice(0, 240);
+
+      return {
+        rating,
+        comment: normalizedComment,
+        languageRating,
+        languageComment: languageComment || undefined,
+      };
     } catch {
       return null;
     }

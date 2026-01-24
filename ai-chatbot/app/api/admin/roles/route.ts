@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { dbService } from "@/lib/db.service";
+import { openAiService } from "@/server/services/openai.service";
 
 export async function GET(request: NextRequest) {
   const token = request.nextUrl.searchParams.get("token");
@@ -34,7 +35,20 @@ export async function POST(request: NextRequest) {
     }
 
     const employer = await dbService.getOrCreateEmployer(token, token); // Use token as name for now
-    const role = await dbService.createRole(employer.id, name, description);
+    let roleDescription = description;
+    if (!roleDescription) {
+      roleDescription = await openAiService.generateRoleDescription(
+        name,
+        employer.name
+      );
+      if (!roleDescription) {
+        return NextResponse.json(
+          { error: "Failed to generate role description" },
+          { status: 500 }
+        );
+      }
+    }
+    const role = await dbService.createRole(employer.id, name, roleDescription);
 
     return NextResponse.json({ role });
   } catch (error) {
@@ -56,5 +70,34 @@ export async function DELETE(request: NextRequest) {
   } catch (error) {
     console.error("Error deleting role:", error);
     return NextResponse.json({ error: "Failed to delete role" }, { status: 500 });
+  }
+}
+
+export async function PATCH(request: NextRequest) {
+  try {
+    const { token, roleId, name, description } = await request.json();
+
+    if (!token || !roleId) {
+      return NextResponse.json(
+        { error: "Token and roleId required" },
+        { status: 400 }
+      );
+    }
+
+    const employer = await dbService.getEmployerByToken(token);
+    if (!employer) {
+      return NextResponse.json({ error: "Employer not found" }, { status: 404 });
+    }
+
+    const role = await dbService.getRoleById(roleId);
+    if (!role || role.employer_id !== employer.id) {
+      return NextResponse.json({ error: "Role not found" }, { status: 404 });
+    }
+
+    const updated = await dbService.updateRole(roleId, name, description);
+    return NextResponse.json({ role: updated });
+  } catch (error) {
+    console.error("Error updating role:", error);
+    return NextResponse.json({ error: "Failed to update role" }, { status: 500 });
   }
 }

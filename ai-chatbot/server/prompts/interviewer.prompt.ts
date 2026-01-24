@@ -1,6 +1,9 @@
 import { InterviewState } from "../state/interview.state";
 
 export function buildInterviewerPrompt(state: InterviewState): string {
+  const languageLabel =
+    state.language === "zh" ? "Chinese (Simplified)" : "English";
+
   return `
 You are a professional AI interviewer representing ${
     state.employer ?? "the hiring company"
@@ -17,6 +20,7 @@ Interview stages:
 
 Candidate role: ${state.role ?? "Unknown"}
 Candidate name: ${state.candidateName ?? "Unknown"}
+Interview language: ${languageLabel}
 
 --- COMPANY CONTEXT ---
 Company Name: ${state.employer ?? "Unknown Company"}
@@ -25,6 +29,8 @@ Perspective: You are part of the hiring team at this company
 
 --- INSTRUCTIONS ---
 - Always speak as a representative of ${state.employer ?? "the company"}
+- Conduct the interview entirely in ${languageLabel}
+- Encourage the candidate to answer in ${languageLabel}
 - Do NOT mention OpenAI, AI, or being a bot
 - Ask questions relevant to the candidate's role
 - Ask ONE clear question at a time

@@ -9,6 +9,7 @@ import { Interview, InterviewMessage, Role } from "@/lib/supabase";
 import {
   fetchRoles,
   createRole,
+  updateRole,
   deleteRole,
   sendInterviewInvite,
   fetchInterviews,
@@ -35,12 +36,15 @@ function AdminDashboardContent() {
 
   // Add role form state
   const [newRoleName, setNewRoleName] = useState("");
-  const [newRoleDescription, setNewRoleDescription] = useState("");
   const [loading, setLoading] = useState(false);
   const [deleteRoleConfirmId, setDeleteRoleConfirmId] = useState<string | null>(
     null
   );
   const [deletingRoleId, setDeletingRoleId] = useState<string | null>(null);
+  const [editingRoleId, setEditingRoleId] = useState<string | null>(null);
+  const [editRoleName, setEditRoleName] = useState("");
+  const [editRoleDescription, setEditRoleDescription] = useState("");
+  const [savingRoleId, setSavingRoleId] = useState<string | null>(null);
 
   const [candidateEmail, setCandidateEmail] = useState("");
   const [candidateEmailWasPasted, setCandidateEmailWasPasted] = useState(false);
@@ -226,9 +230,8 @@ function AdminDashboardContent() {
 
     setLoading(true);
     try {
-      await createRole(token, newRoleName, newRoleDescription);
+      await createRole(token, newRoleName);
       setNewRoleName("");
-      setNewRoleDescription("");
       await loadRoles();
       showEmailToast("success", "Role created successfully");
     } catch (error) {
@@ -241,6 +244,42 @@ function AdminDashboardContent() {
 
   const handleDeleteRole = (roleId: string) => {
     setDeleteRoleConfirmId(roleId);
+  };
+
+  const handleStartEditRole = (roleId: string) => {
+    const roleToEdit = roles.find((item) => item.id === roleId);
+    if (!roleToEdit) return;
+    setEditingRoleId(roleId);
+    setEditRoleName(roleToEdit.name);
+    setEditRoleDescription(roleToEdit.description || "");
+  };
+
+  const handleCancelEditRole = () => {
+    setEditingRoleId(null);
+    setEditRoleName("");
+    setEditRoleDescription("");
+  };
+
+  const handleSaveRole = async (roleId: string) => {
+    if (!token) return;
+    if (!editRoleName.trim()) return;
+    setSavingRoleId(roleId);
+    try {
+      const data = await updateRole(token, roleId, {
+        name: editRoleName.trim(),
+        description: editRoleDescription.trim(),
+      });
+      setRoles((prev) =>
+        prev.map((item) => (item.id === roleId ? data.role : item))
+      );
+      showEmailToast("success", "Role updated");
+      handleCancelEditRole();
+    } catch (error) {
+      console.error("Error updating role:", error);
+      showEmailToast("error", "Failed to update role");
+    } finally {
+      setSavingRoleId(null);
+    }
   };
 
   const handleConfirmDeleteRole = async () => {
@@ -504,18 +543,12 @@ function AdminDashboardContent() {
                             <label className="text-sm font-medium text-black block">
                               Chat Interview Link
                             </label>
-                            <div className="flex gap-2">
+                            <div>
                               <input
                                 value={link}
                                 readOnly
-                                className="flex-1 border border-slate-300 rounded-lg px-4 py-2.5 text-sm text-black bg-slate-50 focus:outline-none"
+                                className="w-full border border-slate-300 rounded-lg px-4 py-2.5 text-sm text-black bg-slate-50 focus:outline-none"
                               />
-                              <button
-                                onClick={() => copyToClipboard(link)}
-                                className="bg-slate-900 text-white px-4 rounded-lg text-sm hover:bg-slate-800 transition-colors font-medium"
-                              >
-                                Copy
-                              </button>
                             </div>
                           </div>
                           {voiceLink && (
@@ -523,18 +556,12 @@ function AdminDashboardContent() {
                               <label className="text-sm font-medium text-black block">
                                 Voice Interview Link
                               </label>
-                              <div className="flex gap-2">
+                              <div>
                                 <input
                                   value={voiceLink}
                                   readOnly
-                                  className="flex-1 border border-slate-300 rounded-lg px-4 py-2.5 text-sm text-black bg-slate-50 focus:outline-none"
+                                  className="w-full border border-slate-300 rounded-lg px-4 py-2.5 text-sm text-black bg-slate-50 focus:outline-none"
                                 />
-                                <button
-                                  onClick={() => copyToClipboard(voiceLink)}
-                                  className="bg-slate-900 text-white px-4 rounded-lg text-sm hover:bg-slate-800 transition-colors font-medium"
-                                >
-                                  Copy
-                                </button>
                               </div>
                             </div>
                           )}
@@ -630,21 +657,9 @@ function AdminDashboardContent() {
                           onChange={(e) => setNewRoleName(e.target.value)}
                           className="w-full border border-slate-300 rounded-lg px-4 py-2.5 text-sm text-black focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent"
                         />
-                      </div>
-
-                      <div>
-                        <label className="text-sm font-medium text-slate-900 mb-2 block">
-                          Description
-                        </label>
-                        <textarea
-                          placeholder="Brief description of the role..."
-                          rows={4}
-                          value={newRoleDescription}
-                          onChange={(e) =>
-                            setNewRoleDescription(e.target.value)
-                          }
-                          className="w-full border border-slate-300 rounded-lg px-4 py-2.5 text-sm text-black focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent"
-                        />
+                        <p className="mt-2 text-xs text-slate-500">
+                          Description will be generated automatically.
+                        </p>
                       </div>
 
                       <button
@@ -670,21 +685,82 @@ function AdminDashboardContent() {
                               className="flex items-start justify-between p-4 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
                             >
                               <div className="flex-1">
-                                <h4 className="font-medium text-slate-900">
-                                  {r.name}
-                                </h4>
-                                {r.description && (
-                                  <p className="text-sm text-slate-600 mt-1">
-                                    {r.description}
-                                  </p>
+                                {editingRoleId === r.id ? (
+                                  <div className="space-y-3">
+                                    <div>
+                                      <label className="text-xs font-medium text-slate-700 block mb-1">
+                                        Role Name
+                                      </label>
+                                      <input
+                                        type="text"
+                                        value={editRoleName}
+                                        onChange={(event) =>
+                                          setEditRoleName(event.target.value)
+                                        }
+                                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-black focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="text-xs font-medium text-slate-700 block mb-1">
+                                        Description
+                                      </label>
+                                      <textarea
+                                        rows={3}
+                                        value={editRoleDescription}
+                                        onChange={(event) =>
+                                          setEditRoleDescription(event.target.value)
+                                        }
+                                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-black focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent"
+                                      />
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <>
+                                    <h4 className="font-medium text-slate-900">
+                                      {r.name}
+                                    </h4>
+                                    {r.description && (
+                                      <p className="text-sm text-slate-600 mt-1">
+                                        {r.description}
+                                      </p>
+                                    )}
+                                  </>
                                 )}
                               </div>
-                              <button
-                                onClick={() => handleDeleteRole(r.id)}
-                                className="ml-4 text-red-600 hover:text-red-800 text-sm font-medium"
-                              >
-                                Delete
-                              </button>
+                              <div className="ml-4 flex flex-col items-end gap-2">
+                                {editingRoleId === r.id ? (
+                                  <>
+                                    <button
+                                      onClick={() => handleSaveRole(r.id)}
+                                      disabled={savingRoleId === r.id || !editRoleName.trim()}
+                                      className="text-emerald-700 hover:text-emerald-900 text-sm font-medium disabled:opacity-50"
+                                    >
+                                      {savingRoleId === r.id ? "Saving..." : "Save"}
+                                    </button>
+                                    <button
+                                      onClick={handleCancelEditRole}
+                                      className="text-slate-500 hover:text-slate-700 text-sm font-medium"
+                                    >
+                                      Cancel
+                                    </button>
+                                  </>
+                                ) : (
+                                  <>
+                                    <button
+                                      onClick={() => handleStartEditRole(r.id)}
+                                      className="text-slate-700 hover:text-slate-900 text-sm font-medium"
+                                    >
+                                      Edit
+                                    </button>
+                                    <button
+                                      onClick={() => handleDeleteRole(r.id)}
+                                      className="text-red-600 hover:text-red-800 text-sm font-medium"
+                                    >
+                                      Delete
+                                    </button>
+                                  </>
+                                )}
+                              </div>
                             </div>
                           ))}
                         </div>
@@ -761,8 +837,14 @@ function AdminDashboardContent() {
                           "Unknown role";
                         const startedAt = interview.started_at || interview.created_at;
                         const ratingDisplay =
-                          interview.rating !== null
+                          typeof interview.rating === "number"
                             ? `${interview.rating}/10`
+                            : interview.status === "completed"
+                              ? "Pending"
+                              : "Not rated";
+                        const languageRatingDisplay =
+                          typeof interview.language_rating === "number"
+                            ? `${interview.language_rating}/10`
                             : interview.status === "completed"
                               ? "Pending"
                               : "Not rated";
@@ -832,11 +914,22 @@ function AdminDashboardContent() {
                                   {ratingDisplay}
                                 </p>
                                 <p className="text-xs text-slate-600 mt-1">
+                                  <span className="font-medium text-slate-900">
+                                    Language Skill:
+                                  </span>{" "}
+                                  {languageRatingDisplay}
+                                </p>
+                                <p className="text-xs text-slate-600 mt-1">
                                   {interview.rating_comment ||
                                     (interview.status === "completed"
                                       ? "Rating comment pending."
                                       : "Rating will be generated after completion.")}
                                 </p>
+                                {interview.language_rating_comment && (
+                                  <p className="text-xs text-slate-600 mt-1">
+                                    {interview.language_rating_comment}
+                                  </p>
+                                )}
                               </div>
                               {isLoadingMessages && (
                                 <p className="text-sm text-slate-500">

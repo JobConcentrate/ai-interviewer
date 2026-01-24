@@ -13,7 +13,8 @@ export class InterviewService {
     token?: string,
     roleId?: string,
     candidateEmail?: string,
-    accessToken?: string
+    accessToken?: string,
+    language?: "en" | "zh"
   ): Promise<InterviewState> {
     if (!interviewStates.has(sessionId)) {
       const state = new InterviewState();
@@ -27,6 +28,7 @@ export class InterviewService {
     // Safety: only set if missing
     if (role && !state.role) state.role = role;
     if (employer && !state.employer) state.employer = employer;
+    if (language && !state.language) state.language = language;
 
     if (!state.loadedFromDb && (token || accessToken)) {
       let interview = null;
@@ -125,7 +127,8 @@ export class InterviewService {
     roleId?: string,
     candidateEmail?: string,
     accessToken?: string,
-    startInterview?: boolean
+    startInterview?: boolean,
+    language?: "en" | "zh"
   ): Promise<{ message: string; messages?: Message[]; ended: boolean }> {
     const state = await this.getState(
       sessionId,
@@ -134,8 +137,34 @@ export class InterviewService {
       token,
       roleId,
       candidateEmail,
-      accessToken
+      accessToken,
+      language
     );
+    if (!state.language) state.language = language ?? "en";
+
+    const strings =
+      state.language === "zh"
+        ? {
+            greetingName: (name: string, employerName: string) =>
+              `你好，${name}！欢迎参加你在${employerName}的面试。准备好开始了吗？`,
+            greetingNoName: (employerName: string) =>
+              `你好！欢迎参加你在${employerName}的面试。为了开始，请告诉我你的全名。`,
+            introName: (name: string) => `谢谢，${name}。请简单介绍一下你自己。`,
+            introNoName: "谢谢。请简单介绍一下你自己。",
+            interviewEnded: "面试已结束。谢谢。",
+            concluded: "面试已结束。",
+          }
+        : {
+            greetingName: (name: string, employerName: string) =>
+              `Hello ${name}! Welcome to your interview with ${employerName}. Are you ready to begin?`,
+            greetingNoName: (employerName: string) =>
+              `Hello! Welcome to your interview with ${employerName}. To get started, what is your full name?`,
+            introName: (name: string) =>
+              `Thanks, ${name}. Could you briefly introduce yourself?`,
+            introNoName: "Thanks. Could you briefly introduce yourself?",
+            interviewEnded: "The interview has ended. Thank you.",
+            concluded: "The interview has concluded.",
+          };
 
     const hasUserMessage = Boolean(userMessage?.trim());
     const shouldStart = Boolean(startInterview) || hasUserMessage;
@@ -146,13 +175,11 @@ export class InterviewService {
 
     /* ---------- INITIAL GREETING ---------- */
     if (state.history.length === 0 && !userMessage) {
+      const employerName =
+        state.employer ?? (state.language === "zh" ? "我们的公司" : "our company");
       const greeting = state.candidateName
-        ? `Hello ${state.candidateName}! Welcome to your interview with ${
-            state.employer ?? "our company"
-          }. Are you ready to begin?`
-        : `Hello! Welcome to your interview with ${
-            state.employer ?? "our company"
-          }. To get started, what is your full name?`;
+        ? strings.greetingName(state.candidateName, employerName)
+        : strings.greetingNoName(employerName);
 
       state.history.push({ role: "assistant", message: greeting });
       await this.persistMessage(state, "assistant", greeting);
@@ -172,8 +199,8 @@ export class InterviewService {
         }
       }
       const intro = state.candidateName
-        ? `Thanks, ${state.candidateName}. Could you briefly introduce yourself?`
-        : "Thanks. Could you briefly introduce yourself?";
+        ? strings.introName(state.candidateName)
+        : strings.introNoName;
       state.history.push({ role: "user", message: userMessage });
       state.history.push({ role: "assistant", message: intro });
       await this.persistMessage(state, "user", userMessage);
@@ -186,14 +213,14 @@ export class InterviewService {
       return { messages: this.mapHistory(state), message: "", ended: state.ended };
 
     if (state.ended)
-      return { message: "The interview has ended. Thank you.", ended: true };
+      return { message: strings.interviewEnded, ended: true };
 
     /* ---------- AI RESPONSE ---------- */
     const aiReply: AiReply = await openAiService.getReply(userMessage, state);
     const aiMessage = aiReply.interviewEnded
       ? (aiReply.message
-          ? `${aiReply.message}\n\nThe interview has concluded.`
-          : "The interview has concluded.")
+          ? `${aiReply.message}\n\n${strings.concluded}`
+          : strings.concluded)
       : aiReply.message;
 
     state.history.push({ role: "user", message: userMessage });
@@ -251,7 +278,9 @@ export class InterviewService {
       await dbService.updateInterviewRating(
         state.interviewId,
         rating.rating,
-        rating.comment || null
+        rating.comment || null,
+        rating.languageRating ?? null,
+        rating.languageComment ?? null
       );
       return;
     }

@@ -13,6 +13,7 @@ export async function POST(req: Request) {
       candidateEmail,
       accessToken,
       startInterview,
+      language,
     } = await req.json();
 
     if (!sessionId) {
@@ -28,7 +29,8 @@ export async function POST(req: Request) {
       roleId,
       candidateEmail,
       accessToken,
-      startInterview
+      startInterview,
+      language
     );
     return NextResponse.json(result);
   } catch (err: unknown) {

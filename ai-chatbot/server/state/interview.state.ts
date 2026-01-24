@@ -16,6 +16,8 @@ export type AiReply = {
 export type InterviewRating = {
   rating: number;
   comment: string;
+  languageRating?: number;
+  languageComment?: string;
 };
 
 export type HistoryItem = {
@@ -32,6 +34,7 @@ export class InterviewState {
   employer?: string;
   candidateName?: string;
   candidateEmail?: string;
+  language?: "en" | "zh";
   ratingRequested = false;
   interviewId?: string;
   employerId?: string;
