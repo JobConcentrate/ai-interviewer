@@ -27,7 +27,6 @@ function AdminDashboardContent() {
   const [roles, setRoles] = useState<Role[]>([]);
   const [link, setLink] = useState<string | null>(null);
   const [linkExpiresAt, setLinkExpiresAt] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
   const [interviewMode, setInterviewMode] = useState<"chat" | "voice">("chat");
   const [interviewLanguage, setInterviewLanguage] = useState<"en" | "zh">("en");
   const [activeTab, setActiveTab] = useState("generate");
@@ -100,7 +99,6 @@ function AdminDashboardContent() {
   useEffect(() => {
     setLink(null);
     setLinkExpiresAt(null);
-    setCopied(false);
   }, [interviewMode, interviewLanguage, role]);
 
   const loadRoles = async (attempt = 1) => {
@@ -332,7 +330,6 @@ function AdminDashboardContent() {
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + 7);
       setLinkExpiresAt(expiresAt.toISOString());
-      setCopied(false);
     } catch (error) {
       console.error("Error creating interview link:", error);
       showEmailToast("error", "Failed to create interview link");
@@ -342,19 +339,6 @@ function AdminDashboardContent() {
   const showEmailToast = (type: "success" | "error", message: string) => {
     setEmailToast({ type, message });
     setTimeout(() => setEmailToast(null), 2500);
-  };
-
-  const handleCopyLink = async () => {
-    if (!link) return;
-    try {
-      await navigator.clipboard.writeText(link);
-      setCopied(true);
-      showEmailToast("success", "Link copied");
-      setTimeout(() => setCopied(false), 2000);
-    } catch (error) {
-      console.error("Error copying link:", error);
-      showEmailToast("error", "Copy not supported in this window");
-    }
   };
 
   const isValidEmail = (value: string) => {
@@ -663,30 +647,26 @@ function AdminDashboardContent() {
                         </button>
 
                         {link && (
-                          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 space-y-3">
-                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                              <div>
-                                <p className="text-sm font-semibold text-emerald-900">
-                                  Interview Link Ready
-                                </p>
-                                <p className="text-xs text-emerald-800 mt-1">
-                                  {interviewMode === "voice" ? "Voice" : "Chat"} interview in{" "}
-                                  {interviewLanguage === "zh" ? "Chinese" : "English"}.
-                                </p>
-                              </div>
-                              <div className="flex flex-col sm:flex-row gap-2">
-                                <button
-                                  type="button"
-                                  onClick={handleCopyLink}
-                                  className={`rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors ${
-                                    copied
-                                      ? "bg-emerald-700 text-white"
-                                      : "bg-slate-900 text-white hover:bg-slate-800"
-                                  }`}
-                                >
-                                  {copied ? "Copied" : "Copy Link"}
-                                </button>
-                              </div>
+                          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 space-y-4">
+                            <div>
+                              <p className="text-sm font-semibold text-emerald-900">
+                                Interview Link Ready
+                              </p>
+                              <p className="text-xs text-emerald-800 mt-1">
+                                {interviewMode === "voice" ? "Voice" : "Chat"} interview in{" "}
+                                {interviewLanguage === "zh" ? "Chinese" : "English"}.
+                              </p>
+                            </div>
+                            <div>
+                              <label className="block text-[11px] font-semibold uppercase tracking-wide text-emerald-900/80 mb-1.5">
+                                Interview Link
+                              </label>
+                              <input
+                                value={link}
+                                readOnly
+                                onFocus={(event) => event.currentTarget.select()}
+                                className="w-full border border-emerald-200 bg-white rounded-xl px-4 py-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                              />
                             </div>
                             <div className="text-xs text-emerald-900/80">
                               {linkExpiresLabel
