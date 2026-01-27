@@ -26,6 +26,8 @@ function AdminDashboardContent() {
   const [role, setRole] = useState("");
   const [roles, setRoles] = useState<Role[]>([]);
   const [link, setLink] = useState<string | null>(null);
+  const [linkExpiresAt, setLinkExpiresAt] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
   const [interviewMode, setInterviewMode] = useState<"chat" | "voice">("chat");
   const [interviewLanguage, setInterviewLanguage] = useState<"en" | "zh">("en");
   const [activeTab, setActiveTab] = useState("generate");
@@ -97,7 +99,9 @@ function AdminDashboardContent() {
 
   useEffect(() => {
     setLink(null);
-  }, [interviewMode, interviewLanguage]);
+    setLinkExpiresAt(null);
+    setCopied(false);
+  }, [interviewMode, interviewLanguage, role]);
 
   const loadRoles = async (attempt = 1) => {
     try {
@@ -325,6 +329,10 @@ function AdminDashboardContent() {
         `&language=${interviewLanguage}`;
 
       setLink(interviewUrl);
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 7);
+      setLinkExpiresAt(expiresAt.toISOString());
+      setCopied(false);
     } catch (error) {
       console.error("Error creating interview link:", error);
       showEmailToast("error", "Failed to create interview link");
@@ -336,11 +344,28 @@ function AdminDashboardContent() {
     setTimeout(() => setEmailToast(null), 2500);
   };
 
+  const handleCopyLink = async () => {
+    if (!link) return;
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+      showEmailToast("success", "Link copied");
+      setTimeout(() => setCopied(false), 2000);
+    } catch (error) {
+      console.error("Error copying link:", error);
+      showEmailToast("error", "Copy not supported in this window");
+    }
+  };
+
   const isValidEmail = (value: string) => {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
   };
 
   const getSelectedInviteLink = () => link;
+  const linkExpiresLabel = linkExpiresAt
+    ? new Date(linkExpiresAt).toLocaleDateString()
+    : null;
+  const selectedRoleName = roles.find((r) => r.id === role)?.name ?? "Not set";
 
   const handleOpenEmailConfirm = () => {
     const trimmedEmail = candidateEmail.trim();
@@ -479,19 +504,30 @@ function AdminDashboardContent() {
               <div className="w-full max-w-3xl">
                 {subTab === "generate-link" && (
                   <>
-                    <div className="mb-6">
-                      <h2 className="text-2xl font-semibold text-slate-900 mb-2">
-                        Generate Interview Link
-                      </h2>
-                      <p className="text-slate-600">
-                        Create a unique interview link for your candidate. Share
-                        this link to begin the interview process.
-                      </p>
+                    <div className="mb-8 space-y-4">
+                      <div>
+                        <h2 className="text-3xl font-semibold text-slate-900">
+                          Generate Interview Link
+                        </h2>
+                        <p className="text-slate-600 mt-2">
+                          Configure the interview, generate a secure link, then
+                          optionally send it to your candidate.
+                        </p>
+                      </div>
                     </div>
 
-                    <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6 space-y-6">
-                      {/* Role Selector */}
-                      <div>
+                    <div className="space-y-6">
+                      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-6">
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                            Step 1
+                          </p>
+                          <h3 className="text-lg font-semibold text-slate-900 mt-1">
+                            Configure Interview
+                          </h3>
+                        </div>
+                        {/* Role Selector */}
+                        <div>
                         <label className="text-sm font-medium text-slate-900 mb-2 block">
                           Candidate Role
                         </label>
@@ -499,7 +535,7 @@ function AdminDashboardContent() {
                           <select
                             value={role}
                             onChange={(e) => setRole(e.target.value)}
-                            className="w-full border border-slate-300 rounded-lg px-4 py-2.5 text-sm text-black focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent"
+                            className="w-full border border-slate-300 rounded-xl px-4 py-3 text-sm text-black bg-white focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent"
                           >
                             {roles.map((r) => (
                               <option key={r.id} value={r.id}>
@@ -508,110 +544,197 @@ function AdminDashboardContent() {
                             ))}
                           </select>
                         ) : (
-                          <div className="text-sm text-slate-500 bg-slate-50 border border-slate-200 rounded-lg px-4 py-3">
+                          <div className="text-sm text-slate-500 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
                             No roles available. Please add a role first.
                           </div>
                         )}
                       </div>
 
                       <div className="grid gap-4 md:grid-cols-2">
-                        <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 space-y-2">
+                        <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 space-y-3">
                           <p className="text-sm font-medium text-slate-900">
                             Interview Type
                           </p>
-                          <div className="grid grid-cols-2 gap-2">
+                          <div className="grid gap-3 sm:grid-cols-2">
                             <button
+                              type="button"
                               onClick={() => setInterviewMode("chat")}
-                              className={`w-full rounded-lg border px-3 py-2.5 text-sm font-medium transition-all ${
-                                interviewMode === "chat"
-                                  ? "border-slate-900 bg-slate-900 text-white shadow-sm"
-                                  : "border-slate-300 bg-white text-slate-700 hover:border-slate-400 hover:bg-slate-50"
-                              }`}
                               aria-pressed={interviewMode === "chat"}
+                              className={`w-full rounded-xl border p-4 text-left transition-all ${
+                                interviewMode === "chat"
+                                  ? "border-slate-900 bg-white shadow-sm ring-1 ring-slate-900"
+                                  : "border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm"
+                              }`}
                             >
-                              Chat
+                              <div className="space-y-1">
+                                <p className="text-sm font-semibold text-slate-900">
+                                  Chat
+                                </p>
+                                <p className="text-xs text-slate-500">
+                                  Text-based interview.
+                                </p>
+                              </div>
                             </button>
                             <button
+                              type="button"
                               onClick={() => setInterviewMode("voice")}
-                              className={`w-full rounded-lg border px-3 py-2.5 text-sm font-medium transition-all ${
-                                interviewMode === "voice"
-                                  ? "border-slate-900 bg-slate-900 text-white shadow-sm"
-                                  : "border-slate-300 bg-white text-slate-700 hover:border-slate-400 hover:bg-slate-50"
-                              }`}
                               aria-pressed={interviewMode === "voice"}
+                              className={`w-full rounded-xl border p-4 text-left transition-all ${
+                                interviewMode === "voice"
+                                  ? "border-slate-900 bg-white shadow-sm ring-1 ring-slate-900"
+                                  : "border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm"
+                              }`}
                             >
-                              Voice
+                              <div className="space-y-1">
+                                <p className="text-sm font-semibold text-slate-900">
+                                  Voice
+                                </p>
+                                <p className="text-xs text-slate-500">
+                                  Real-time voice call.
+                                </p>
+                              </div>
                             </button>
                           </div>
                         </div>
 
-                        <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 space-y-2">
+                        <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 space-y-3">
                           <p className="text-sm font-medium text-slate-900">
                             Interview Language
                           </p>
-                          <div className="grid grid-cols-2 gap-2">
+                          <div className="grid gap-3 sm:grid-cols-2">
                             <button
+                              type="button"
                               onClick={() => setInterviewLanguage("en")}
-                              className={`w-full rounded-lg border px-3 py-2.5 text-sm font-medium transition-all ${
-                                interviewLanguage === "en"
-                                  ? "border-slate-900 bg-slate-900 text-white shadow-sm"
-                                  : "border-slate-300 bg-white text-slate-700 hover:border-slate-400 hover:bg-slate-50"
-                              }`}
                               aria-pressed={interviewLanguage === "en"}
+                              className={`w-full rounded-xl border p-4 text-left transition-all ${
+                                interviewLanguage === "en"
+                                  ? "border-slate-900 bg-white shadow-sm ring-1 ring-slate-900"
+                                  : "border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm"
+                              }`}
                             >
-                              English
+                              <div className="space-y-1">
+                                <p className="text-sm font-semibold text-slate-900">
+                                  English
+                                </p>
+                                <p className="text-xs text-slate-500">
+                                  Interview conducted in English.
+                                </p>
+                              </div>
                             </button>
                             <button
+                              type="button"
                               onClick={() => setInterviewLanguage("zh")}
-                              className={`w-full rounded-lg border px-3 py-2.5 text-sm font-medium transition-all ${
-                                interviewLanguage === "zh"
-                                  ? "border-slate-900 bg-slate-900 text-white shadow-sm"
-                                  : "border-slate-300 bg-white text-slate-700 hover:border-slate-400 hover:bg-slate-50"
-                              }`}
                               aria-pressed={interviewLanguage === "zh"}
+                              className={`w-full rounded-xl border p-4 text-left transition-all ${
+                                interviewLanguage === "zh"
+                                  ? "border-slate-900 bg-white shadow-sm ring-1 ring-slate-900"
+                                  : "border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm"
+                              }`}
                             >
-                              Chinese
+                              <div className="space-y-1">
+                                <p className="text-sm font-semibold text-slate-900">
+                                  Chinese
+                                </p>
+                                <p className="text-xs text-slate-500">
+                                  Interview conducted in Chinese.
+                                </p>
+                              </div>
                             </button>
                           </div>
                         </div>
                       </div>
+                      </section>
 
-                      <button
-                        onClick={generateInterviewLink}
-                        disabled={roles.length === 0}
-                        className="w-full bg-slate-900 text-white py-3 rounded-xl hover:bg-slate-800 transition-colors font-semibold shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        Generate Interview Link
-                      </button>
+                      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                            Step 2
+                          </p>
+                          <h3 className="text-lg font-semibold text-slate-900 mt-1">
+                            Generate Link
+                          </h3>
+                        </div>
+                        <button
+                          onClick={generateInterviewLink}
+                          disabled={roles.length === 0}
+                          className="w-full rounded-2xl bg-gradient-to-r from-slate-900 via-slate-800 to-slate-700 text-white py-4 text-base font-semibold shadow-lg hover:from-slate-800 hover:via-slate-800 hover:to-slate-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          Generate Interview Link
+                        </button>
 
-                      {link && (
-                        <div className="space-y-4 pt-4 border-t border-slate-200">
-                          <div className="space-y-2">
-                            <label className="text-sm font-medium text-black block">
-                              {interviewMode === "voice"
-                                ? "Voice Interview Link"
-                                : "Chat Interview Link"}
-                            </label>
-                            <div>
-                              <input
-                                value={link}
-                                readOnly
-                                className="w-full border border-slate-300 rounded-lg px-4 py-2.5 text-sm text-black bg-slate-50 focus:outline-none"
-                              />
+                        {link && (
+                          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 space-y-3">
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                              <div>
+                                <p className="text-sm font-semibold text-emerald-900">
+                                  Interview Link Ready
+                                </p>
+                                <p className="text-xs text-emerald-800 mt-1">
+                                  {interviewMode === "voice" ? "Voice" : "Chat"} interview in{" "}
+                                  {interviewLanguage === "zh" ? "Chinese" : "English"}.
+                                </p>
+                              </div>
+                              <div className="flex flex-col sm:flex-row gap-2">
+                                <button
+                                  type="button"
+                                  onClick={handleCopyLink}
+                                  className={`rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors ${
+                                    copied
+                                      ? "bg-emerald-700 text-white"
+                                      : "bg-slate-900 text-white hover:bg-slate-800"
+                                  }`}
+                                >
+                                  {copied ? "Copied" : "Copy Link"}
+                                </button>
+                              </div>
+                            </div>
+                            <div className="text-xs text-emerald-900/80">
+                              {linkExpiresLabel
+                                ? `Link expires on ${linkExpiresLabel}.`
+                                : "Link expires in 7 days."}
                             </div>
                           </div>
-                        </div>
-                      )}
+                        )}
+                      </section>
 
-                      {link && (
-                        <div className="space-y-4 pt-6 border-t border-slate-200">
-                          <h3 className="text-sm font-medium text-slate-900">
-                            Send interview link via email
-                          </h3>
-                          <p className="text-xs text-slate-500">
-                            Using {interviewMode} mode in{" "}
-                            {interviewLanguage === "zh" ? "Chinese" : "English"}.
+                      <section className="rounded-2xl border border-slate-200 bg-slate-50/80 p-6 shadow-sm space-y-4">
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                            Step 3 (Optional)
                           </p>
+                          <h3 className="text-lg font-semibold text-slate-900 mt-1">
+                            Send to Candidate
+                          </h3>
+                        </div>
+
+                        <div className="grid gap-2 sm:grid-cols-3 text-xs text-slate-600">
+                          <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                            Role:{" "}
+                            <span className="font-semibold text-slate-900">
+                              {selectedRoleName}
+                            </span>
+                          </div>
+                          <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 capitalize">
+                            Type:{" "}
+                            <span className="font-semibold text-slate-900">
+                              {interviewMode}
+                            </span>
+                          </div>
+                          <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                            Language:{" "}
+                            <span className="font-semibold text-slate-900">
+                              {interviewLanguage === "zh" ? "Chinese" : "English"}
+                            </span>
+                          </div>
+                        </div>
+
+                        {!link && (
+                          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
+                            Generate the interview link above before sending an email.
+                          </div>
+                        )}
+
+                        <div className="flex flex-col sm:flex-row gap-3">
                           <input
                             type="email"
                             placeholder="Candidate email"
@@ -623,17 +746,18 @@ function AdminDashboardContent() {
                               }
                             }}
                             onPaste={() => setCandidateEmailWasPasted(true)}
-                            className="w-full border border-slate-300 rounded-lg px-4 py-2.5 text-sm text-black focus:outline-none focus:ring-2 focus:ring-slate-900"
+                            disabled={!link}
+                            className="flex-1 border border-slate-300 rounded-xl px-4 py-3 text-sm text-black bg-white focus:outline-none focus:ring-2 focus:ring-slate-900 disabled:bg-slate-100 disabled:text-slate-500"
                           />
                           <button
                             onClick={handleOpenEmailConfirm}
-                            disabled={!candidateEmail.trim()}
-                            className="w-full bg-slate-800 text-white py-2.5 rounded-lg hover:bg-slate-700 transition-colors font-medium disabled:opacity-50"
+                            disabled={!link || !candidateEmail.trim()}
+                            className="w-full sm:w-auto bg-slate-800 text-white px-6 py-3 rounded-xl hover:bg-slate-700 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             Send Interview Link
                           </button>
                         </div>
-                      )}
+                      </section>
                     </div>
                   </>
                 )}
