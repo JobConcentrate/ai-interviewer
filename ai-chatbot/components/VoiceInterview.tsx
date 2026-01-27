@@ -20,6 +20,9 @@ export default function VoiceInterview() {
   const urlRoleId = searchParams.get("roleId") ?? undefined;
   const urlCandidateEmail = searchParams.get("candidateEmail") ?? undefined;
   const urlAccessToken = searchParams.get("accessToken") ?? undefined;
+  const rawUrlLanguage = searchParams.get("language");
+  const urlLanguage =
+    rawUrlLanguage === "zh" ? "zh" : rawUrlLanguage === "en" ? "en" : null;
 
   const [sessionId, setSessionId] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
@@ -267,21 +270,28 @@ export default function VoiceInterview() {
   useEffect(() => {
     const sid = urlSessionId ?? uuidv4();
     setSessionId(sid);
-    setLanguage(null);
-    setLanguageLocked(false);
-    setLanguageChecked(false);
-  }, [urlSessionId]);
+    setLanguage(urlLanguage);
+    setLanguageLocked(Boolean(urlLanguage));
+    setLanguageChecked(Boolean(urlLanguage));
+  }, [urlSessionId, urlLanguage]);
 
   useEffect(() => {
     if (!sessionId) return;
     if (typeof window === "undefined") return;
+    if (urlLanguage) {
+      window.localStorage.setItem(languageStorageKey, urlLanguage);
+      setLanguage(urlLanguage);
+      setLanguageLocked(true);
+      setLanguageChecked(true);
+      return;
+    }
     const saved = window.localStorage.getItem(languageStorageKey);
     if (saved === "en" || saved === "zh") {
       setLanguage(saved);
       setLanguageLocked(true);
     }
     setLanguageChecked(true);
-  }, [sessionId, languageStorageKey]);
+  }, [sessionId, languageStorageKey, urlLanguage]);
 
   useEffect(() => {
     if (!sessionId || !language) return;

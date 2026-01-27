@@ -15,6 +15,9 @@ export default function Chat() {
   const urlRoleId = searchParams.get("roleId") ?? undefined;
   const urlCandidateEmail = searchParams.get("candidateEmail") ?? undefined;
   const urlAccessToken = searchParams.get("accessToken") ?? undefined;
+  const rawUrlLanguage = searchParams.get("language");
+  const urlLanguage =
+    rawUrlLanguage === "zh" ? "zh" : rawUrlLanguage === "en" ? "en" : null;
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -39,21 +42,28 @@ export default function Chat() {
     setEnded(false);
     setInitialized(false);
     setInitializing(false);
-    setLanguage(null);
-    setLanguageLocked(false);
-    setLanguageChecked(false);
-  }, [urlSessionId]);
+    setLanguage(urlLanguage);
+    setLanguageLocked(Boolean(urlLanguage));
+    setLanguageChecked(Boolean(urlLanguage));
+  }, [urlSessionId, urlLanguage]);
 
   useEffect(() => {
     if (!sessionId) return;
     if (typeof window === "undefined") return;
+    if (urlLanguage) {
+      window.localStorage.setItem(languageStorageKey, urlLanguage);
+      setLanguage(urlLanguage);
+      setLanguageLocked(true);
+      setLanguageChecked(true);
+      return;
+    }
     const saved = window.localStorage.getItem(languageStorageKey);
     if (saved === "en" || saved === "zh") {
       setLanguage(saved);
       setLanguageLocked(true);
     }
     setLanguageChecked(true);
-  }, [sessionId, languageStorageKey]);
+  }, [sessionId, languageStorageKey, urlLanguage]);
 
   useEffect(() => {
     if (!sessionId || !language) return;

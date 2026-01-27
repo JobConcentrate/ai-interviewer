@@ -26,13 +26,10 @@ function AdminDashboardContent() {
   const [role, setRole] = useState("");
   const [roles, setRoles] = useState<Role[]>([]);
   const [link, setLink] = useState<string | null>(null);
-  const [voiceLink, setVoiceLink] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [interviewMode, setInterviewMode] = useState<"chat" | "voice">("chat");
+  const [interviewLanguage, setInterviewLanguage] = useState<"en" | "zh">("en");
   const [activeTab, setActiveTab] = useState("generate");
   const [subTab, setSubTab] = useState("generate-link");
-  const [inviteLinkType, setInviteLinkType] = useState<"chat" | "voice">(
-    "chat"
-  );
 
   // Add role form state
   const [newRoleName, setNewRoleName] = useState("");
@@ -97,6 +94,10 @@ function AdminDashboardContent() {
       loadInterviews();
     }
   }, [activeTab, token]);
+
+  useEffect(() => {
+    setLink(null);
+  }, [interviewMode, interviewLanguage]);
 
   const loadRoles = async (attempt = 1) => {
     try {
@@ -313,35 +314,21 @@ function AdminDashboardContent() {
         selectedRole.name
       );
 
-      const chatUrl =
-        `${window.location.origin}/room` +
+      const basePath = interviewMode === "voice" ? "/voice" : "/room";
+      const interviewUrl =
+        `${window.location.origin}${basePath}` +
         `?sessionId=${data.sessionId}` +
         `&role=${encodeURIComponent(selectedRole.name)}` +
         `&roleId=${selectedRole.id}` +
         `&employer=${encodeURIComponent(String(employer))}` +
-        `&accessToken=${encodeURIComponent(data.accessToken)}`;
-      const voiceUrl =
-        `${window.location.origin}/voice` +
-        `?sessionId=${data.sessionId}` +
-        `&role=${encodeURIComponent(selectedRole.name)}` +
-        `&roleId=${selectedRole.id}` +
-        `&employer=${encodeURIComponent(String(employer))}` +
-        `&accessToken=${encodeURIComponent(data.accessToken)}`;
+        `&accessToken=${encodeURIComponent(data.accessToken)}` +
+        `&language=${interviewLanguage}`;
 
-      setLink(chatUrl);
-      setVoiceLink(voiceUrl);
-      setInviteLinkType("chat");
+      setLink(interviewUrl);
     } catch (error) {
       console.error("Error creating interview link:", error);
       showEmailToast("error", "Failed to create interview link");
     }
-  };
-
-  const copyToClipboard = async (value?: string | null) => {
-    if (!value) return;
-    await navigator.clipboard.writeText(value);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
   };
 
   const showEmailToast = (type: "success" | "error", message: string) => {
@@ -353,9 +340,7 @@ function AdminDashboardContent() {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
   };
 
-  const getSelectedInviteLink = () => {
-    return inviteLinkType === "voice" ? voiceLink : link;
-  };
+  const getSelectedInviteLink = () => link;
 
   const handleOpenEmailConfirm = () => {
     const trimmedEmail = candidateEmail.trim();
@@ -529,10 +514,72 @@ function AdminDashboardContent() {
                         )}
                       </div>
 
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 space-y-2">
+                          <p className="text-sm font-medium text-slate-900">
+                            Interview Type
+                          </p>
+                          <div className="grid grid-cols-2 gap-2">
+                            <button
+                              onClick={() => setInterviewMode("chat")}
+                              className={`w-full rounded-lg border px-3 py-2.5 text-sm font-medium transition-all ${
+                                interviewMode === "chat"
+                                  ? "border-slate-900 bg-slate-900 text-white shadow-sm"
+                                  : "border-slate-300 bg-white text-slate-700 hover:border-slate-400 hover:bg-slate-50"
+                              }`}
+                              aria-pressed={interviewMode === "chat"}
+                            >
+                              Chat
+                            </button>
+                            <button
+                              onClick={() => setInterviewMode("voice")}
+                              className={`w-full rounded-lg border px-3 py-2.5 text-sm font-medium transition-all ${
+                                interviewMode === "voice"
+                                  ? "border-slate-900 bg-slate-900 text-white shadow-sm"
+                                  : "border-slate-300 bg-white text-slate-700 hover:border-slate-400 hover:bg-slate-50"
+                              }`}
+                              aria-pressed={interviewMode === "voice"}
+                            >
+                              Voice
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 space-y-2">
+                          <p className="text-sm font-medium text-slate-900">
+                            Interview Language
+                          </p>
+                          <div className="grid grid-cols-2 gap-2">
+                            <button
+                              onClick={() => setInterviewLanguage("en")}
+                              className={`w-full rounded-lg border px-3 py-2.5 text-sm font-medium transition-all ${
+                                interviewLanguage === "en"
+                                  ? "border-slate-900 bg-slate-900 text-white shadow-sm"
+                                  : "border-slate-300 bg-white text-slate-700 hover:border-slate-400 hover:bg-slate-50"
+                              }`}
+                              aria-pressed={interviewLanguage === "en"}
+                            >
+                              English
+                            </button>
+                            <button
+                              onClick={() => setInterviewLanguage("zh")}
+                              className={`w-full rounded-lg border px-3 py-2.5 text-sm font-medium transition-all ${
+                                interviewLanguage === "zh"
+                                  ? "border-slate-900 bg-slate-900 text-white shadow-sm"
+                                  : "border-slate-300 bg-white text-slate-700 hover:border-slate-400 hover:bg-slate-50"
+                              }`}
+                              aria-pressed={interviewLanguage === "zh"}
+                            >
+                              Chinese
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
                       <button
                         onClick={generateInterviewLink}
                         disabled={roles.length === 0}
-                        className="w-full bg-slate-900 text-white py-2.5 rounded-lg hover:bg-slate-800 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="w-full bg-slate-900 text-white py-3 rounded-xl hover:bg-slate-800 transition-colors font-semibold shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         Generate Interview Link
                       </button>
@@ -541,7 +588,9 @@ function AdminDashboardContent() {
                         <div className="space-y-4 pt-4 border-t border-slate-200">
                           <div className="space-y-2">
                             <label className="text-sm font-medium text-black block">
-                              Chat Interview Link
+                              {interviewMode === "voice"
+                                ? "Voice Interview Link"
+                                : "Chat Interview Link"}
                             </label>
                             <div>
                               <input
@@ -551,20 +600,6 @@ function AdminDashboardContent() {
                               />
                             </div>
                           </div>
-                          {voiceLink && (
-                            <div className="space-y-2">
-                              <label className="text-sm font-medium text-black block">
-                                Voice Interview Link
-                              </label>
-                              <div>
-                                <input
-                                  value={voiceLink}
-                                  readOnly
-                                  className="w-full border border-slate-300 rounded-lg px-4 py-2.5 text-sm text-black bg-slate-50 focus:outline-none"
-                                />
-                              </div>
-                            </div>
-                          )}
                         </div>
                       )}
 
@@ -573,36 +608,10 @@ function AdminDashboardContent() {
                           <h3 className="text-sm font-medium text-slate-900">
                             Send interview link via email
                           </h3>
-                          <div className="space-y-2">
-                            <p className="text-xs text-slate-500">
-                              Choose link type
-                            </p>
-                            <div className="grid grid-cols-2 gap-2">
-                              <button
-                                onClick={() => setInviteLinkType("chat")}
-                                className={`rounded-lg border py-2 text-sm font-medium transition-colors ${
-                                  inviteLinkType === "chat"
-                                    ? "bg-slate-900 text-white border-slate-900"
-                                    : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"
-                                }`}
-                                aria-pressed={inviteLinkType === "chat"}
-                              >
-                                Chat
-                              </button>
-                              <button
-                                onClick={() => setInviteLinkType("voice")}
-                                className={`rounded-lg border py-2 text-sm font-medium transition-colors ${
-                                  inviteLinkType === "voice"
-                                    ? "bg-slate-900 text-white border-slate-900"
-                                    : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"
-                                }`}
-                                aria-pressed={inviteLinkType === "voice"}
-                                disabled={!voiceLink}
-                              >
-                                Voice
-                              </button>
-                            </div>
-                          </div>
+                          <p className="text-xs text-slate-500">
+                            Using {interviewMode} mode in{" "}
+                            {interviewLanguage === "zh" ? "Chinese" : "English"}.
+                          </p>
                           <input
                             type="email"
                             placeholder="Candidate email"
@@ -989,13 +998,8 @@ function AdminDashboardContent() {
         )}
       </div>
 
-      {(copied || emailToast) && (
+      {emailToast && (
         <div className="fixed bottom-6 right-6 space-y-2 z-50">
-          {copied && (
-            <div className="bg-slate-900 text-white px-4 py-2.5 rounded-lg text-sm shadow-lg">
-              Link copied to clipboard
-            </div>
-          )}
           {emailToast && (
             <div
               className={`px-4 py-2.5 rounded-lg text-sm shadow-lg text-white ${
@@ -1015,8 +1019,7 @@ function AdminDashboardContent() {
               Confirm Email
             </h3>
             <p className="text-sm text-slate-600">
-              Send {inviteLinkType === "voice" ? "voice" : "chat"} interview
-              link to:
+              Send {interviewMode} interview link to:
             </p>
             <p className="font-medium text-slate-900">{candidateEmail}</p>
             <div className="flex gap-3 pt-4">
