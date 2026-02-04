@@ -11,6 +11,8 @@ type VoiceSupport = {
   synthesis: boolean;
 };
 
+const SILENCE_WAIT_MS = 3000;
+
 export default function VoiceInterview() {
   const searchParams = useSearchParams();
   const urlSessionId = searchParams.get("sessionId");
@@ -41,11 +43,25 @@ export default function VoiceInterview() {
   });
 
   const recognitionRef = useRef<any>(null);
+  const silenceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingTranscriptRef = useRef("");
+  const manualStopRef = useRef(false);
   const isVoiceSupported = voiceSupport.recognition && voiceSupport.synthesis;
   const languageCode = language === "zh" ? "zh-CN" : "en-US";
   const languageStorageKey = sessionId
     ? `ai-interviewer-language:${sessionId}`
     : "ai-interviewer-language";
+
+  const clearSilenceTimeout = () => {
+    if (!silenceTimeoutRef.current) return;
+    clearTimeout(silenceTimeoutRef.current);
+    silenceTimeoutRef.current = null;
+  };
+
+  const resetPendingTranscript = () => {
+    pendingTranscriptRef.current = "";
+    clearSilenceTimeout();
+  };
 
   const getSpeechRecognition = () => {
     if (typeof window === "undefined") return null;
@@ -56,7 +72,7 @@ export default function VoiceInterview() {
     if (!recognitionRef.current) {
       recognitionRef.current = new SpeechRecognition();
       recognitionRef.current.interimResults = false;
-      recognitionRef.current.continuous = false;
+      recognitionRef.current.continuous = true;
       recognitionRef.current.maxAlternatives = 1;
     }
     if (language) {
@@ -68,6 +84,8 @@ export default function VoiceInterview() {
   const stopListening = () => {
     const recognition = recognitionRef.current;
     if (!recognition) return;
+    manualStopRef.current = true;
+    resetPendingTranscript();
     try {
       recognition.onresult = null;
       recognition.onerror = null;
@@ -88,20 +106,53 @@ export default function VoiceInterview() {
       return;
     }
 
+    manualStopRef.current = false;
+    resetPendingTranscript();
     setError(null);
     recognition.onresult = (event: any) => {
-      const transcript = event?.results?.[0]?.[0]?.transcript?.trim() ?? "";
-      if (transcript) {
-        void handleSendMessage(transcript);
-      } else {
-        setError("Could not hear a response. Please try again.");
+      for (let i = event.resultIndex; i < event.results.length; i += 1) {
+        const result = event.results[i];
+        if (!result?.isFinal) continue;
+        const segment = result?.[0]?.transcript?.trim() ?? "";
+        if (!segment) continue;
+        pendingTranscriptRef.current = `${pendingTranscriptRef.current} ${segment}`.trim();
       }
+
+      if (!pendingTranscriptRef.current) return;
+
+      clearSilenceTimeout();
+      silenceTimeoutRef.current = setTimeout(() => {
+        const transcript = pendingTranscriptRef.current.trim();
+        resetPendingTranscript();
+        if (!transcript) {
+          setError("Could not hear a response. Please try again.");
+          setListening(false);
+          return;
+        }
+        void handleSendMessage(transcript);
+      }, SILENCE_WAIT_MS);
     };
-    recognition.onerror = () => {
+    recognition.onerror = (event: any) => {
+      const speechError = event?.error;
+      if (speechError === "aborted") {
+        return;
+      }
+      if (speechError === "no-speech" && silenceTimeoutRef.current) {
+        return;
+      }
       setError("Microphone error. Please check permissions.");
       setListening(false);
     };
     recognition.onend = () => {
+      if (!manualStopRef.current && silenceTimeoutRef.current) {
+        try {
+          recognition.start();
+          setListening(true);
+          return;
+        } catch {
+          // Fall through to update UI state.
+        }
+      }
       setListening(false);
     };
 
@@ -319,6 +370,7 @@ export default function VoiceInterview() {
 
   useEffect(() => {
     return () => {
+      clearSilenceTimeout();
       const recognition = recognitionRef.current;
       if (recognition) {
         try {
