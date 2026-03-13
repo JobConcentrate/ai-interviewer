@@ -134,15 +134,31 @@ export class OpenAiService {
     };
   }
 
-  async getInterviewRating(state: InterviewState): Promise<InterviewRating | null> {
-    const maxAttempts = 3;
+  async getInterviewRating(
+    state: InterviewState,
+    options?: {
+      maxAttempts?: number;
+      onAttemptError?: (
+        errorMessage: string,
+        attempt: number,
+        maxAttempts: number
+      ) => void | Promise<void>;
+    }
+  ): Promise<InterviewRating | null> {
+    const maxAttempts = options?.maxAttempts ?? 3;
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      const rating = await this.requestInterviewRating(state);
-      if (rating) return rating;
-
-      if (attempt < maxAttempts) {
-        await this.sleep(60000);
+      try {
+        const rating = await this.requestInterviewRating(state);
+        return rating;
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        if (options?.onAttemptError) {
+          await options.onAttemptError(message, attempt, maxAttempts);
+        }
+        if (attempt < maxAttempts) {
+          await this.sleep(60000);
+        }
       }
     }
 
@@ -151,7 +167,7 @@ export class OpenAiService {
 
   private async requestInterviewRating(
     state: InterviewState
-  ): Promise<InterviewRating | null> {
+  ): Promise<InterviewRating> {
     const languageLabel =
       state.language === "zh" ? "Chinese (Simplified)" : "English";
     const systemPrompt = [
@@ -187,17 +203,21 @@ export class OpenAiService {
       const json: OpenAiResponse & { error?: { message: string } } = await res.json();
 
       if (json.error) {
-        return null;
+        throw new Error(json.error.message || "OpenAI request failed");
       }
 
       if (!json.choices || !Array.isArray(json.choices) || json.choices.length === 0) {
-        return null;
+        throw new Error("OpenAI returned no response");
       }
 
       const content: string = json.choices[0].message?.content ?? "";
-      return this.parseRating(content);
-    } catch {
-      return null;
+      const rating = this.parseRating(content);
+      if (!rating) {
+        throw new Error("Unable to parse rating response");
+      }
+      return rating;
+    } catch (err: unknown) {
+      throw new Error(err instanceof Error ? err.message : String(err));
     }
   }
 

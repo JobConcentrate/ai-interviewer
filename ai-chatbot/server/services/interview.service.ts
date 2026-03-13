@@ -273,7 +273,20 @@ export class InterviewService {
   private async generateRating(state: InterviewState) {
     if (!state.interviewId) return;
 
-    const rating = await openAiService.getInterviewRating(state);
+    const maxAttempts = 5;
+    let lastError = "";
+    const rating = await openAiService.getInterviewRating(state, {
+      maxAttempts,
+      onAttemptError: async (errorMessage, attempt, attempts) => {
+        lastError = errorMessage;
+        const message =
+          attempt < attempts
+            ? `Rating generation error: ${errorMessage}. Retrying in 60 seconds (${attempt}/${attempts}).`
+            : `Rating generation failed: ${errorMessage}.`;
+        console.warn(message);
+        await dbService.updateInterviewRatingComment(state.interviewId!, message);
+      },
+    });
     if (rating) {
       await dbService.updateInterviewRating(
         state.interviewId,
@@ -287,7 +300,7 @@ export class InterviewService {
 
     await dbService.updateInterviewRatingComment(
       state.interviewId,
-      "Failed to generate rating."
+      lastError ? `Rating generation failed: ${lastError}.` : "Failed to generate rating."
     );
   }
 
@@ -328,8 +341,6 @@ export class InterviewService {
         return buildInterviewerPrompt(state);
       case InterviewStage.Expectations:
         return "What are your salary expectations?";
-      case InterviewStage.CandidateQuestions:
-        return "Do you have any questions for us?";
       default:
         return "";
     }

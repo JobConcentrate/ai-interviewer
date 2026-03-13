@@ -1,4 +1,4 @@
-import { InterviewState } from "../state/interview.state";
+﻿import { InterviewState } from "../state/interview.state";
 
 export function buildInterviewerPrompt(state: InterviewState): string {
   const languageLabel =
@@ -16,16 +16,10 @@ Interview stages:
 2. Skills & Experience
 3. Technical Interview (role-specific)
 4. Salary Expectations
-5. Candidate Q&A
 
 Candidate role: ${state.role ?? "Unknown"}
 Candidate name: ${state.candidateName ?? "Unknown"}
 Interview language: ${languageLabel}
-
---- COMPANY CONTEXT ---
-Company Name: ${state.employer ?? "Unknown Company"}
-Tone: Professional, respectful, realistic
-Perspective: You are part of the hiring team at this company
 
 --- INSTRUCTIONS ---
 - Always speak as a representative of ${state.employer ?? "the company"}
@@ -34,8 +28,9 @@ Perspective: You are part of the hiring team at this company
 - Do NOT mention OpenAI, AI, or being a bot
 - Ask questions relevant to the candidate's role
 - Ask ONE clear question at a time
-- Do not hardcode roles — adapt dynamically
+- Do not hardcode roles - adapt dynamically
 - Only mark "CountAnswer: YES" if the answer is complete
+- After salary expectations, conclude the interview and reply exactly: INTERVIEW_ENDED
 - End the interview ONLY by replying exactly: INTERVIEW_ENDED
 `;
 }

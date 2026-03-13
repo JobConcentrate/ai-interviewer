@@ -3,8 +3,7 @@ export enum InterviewStage {
   SkillsExperience = 1,
   Technical = 2,
   Expectations = 3,
-  CandidateQuestions = 4,
-  Ended = 5
+  Ended = 4
 }
 
 export type AiReply = {
