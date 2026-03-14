@@ -111,6 +111,17 @@ export class InterviewService {
           );
         }
 
+        const storedLanguage = interview.language ?? null;
+        if (storedLanguage) {
+          state.language = storedLanguage === "zh" ? "zh" : "en";
+        } else {
+          const resolvedLanguage = state.language ?? language;
+          if (resolvedLanguage) {
+            await dbService.updateInterviewLanguage(interview.id, resolvedLanguage);
+            state.language = resolvedLanguage;
+          }
+        }
+
         state.loadedFromDb = true;
       }
     }
@@ -302,6 +313,41 @@ export class InterviewService {
       state.interviewId,
       lastError ? `Rating generation failed: ${lastError}.` : "Failed to generate rating."
     );
+  }
+
+  async regenerateRatingForInterview(
+    interviewId: string,
+    employerName?: string
+  ): Promise<void> {
+    const interview = await dbService.getInterviewById(interviewId);
+    if (!interview) {
+      throw new Error("Interview not found");
+    }
+    if (interview.status !== "completed") {
+      throw new Error("Interview is not completed");
+    }
+
+    const messages = await dbService.getMessagesByInterview(interview.id);
+    if (messages.length === 0) {
+      throw new Error("No interview messages available");
+    }
+
+    const state = new InterviewState();
+    state.interviewId = interview.id;
+    state.employerId = interview.employer_id;
+    state.employer = employerName ?? undefined;
+    state.role = interview.role_label ?? undefined;
+    state.candidateName = interview.candidate_name ?? undefined;
+    state.candidateEmail = interview.candidate_email ?? undefined;
+    state.language = interview.language === "zh" ? "zh" : "en";
+    state.history = messages.map(message => ({
+      role: message.role,
+      message: message.message,
+    }));
+    state.ended = true;
+    state.ratingRequested = true;
+
+    void this.generateRating(state);
   }
 
   private extractCandidateName(input: string): string {

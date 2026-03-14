@@ -139,6 +139,20 @@ export async function fetchInterviews(
   return response.json();
 }
 
+export async function retryInterviewRating(
+  token: string,
+  interviewId: string
+): Promise<{ started: boolean }> {
+  const response = await fetch("/api/admin/interview-rating", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token, interviewId }),
+  });
+
+  if (!response.ok) throw new Error("Failed to retry interview rating");
+  return response.json();
+}
+
 export async function createInterviewSession(
   token: string,
   roleId: string,

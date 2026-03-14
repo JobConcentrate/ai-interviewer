@@ -15,6 +15,7 @@ import {
   fetchInterviews,
   fetchInterviewMessages,
   deleteInterview,
+  retryInterviewRating,
   createInterviewSession,
 } from "@/lib/api";
 
@@ -72,6 +73,9 @@ function AdminDashboardContent() {
   >(null);
   const [messagesErrorByInterview, setMessagesErrorByInterview] = useState<
     Record<string, string>
+  >({});
+  const [retryingRatingByInterview, setRetryingRatingByInterview] = useState<
+    Record<string, boolean>
   >({});
 
   // Guard: missing token or employer
@@ -134,6 +138,7 @@ function AdminDashboardContent() {
       setLoadedMessagesByInterview({});
       setDeletingHistoryByInterview({});
       setMessagesErrorByInterview({});
+      setRetryingRatingByInterview({});
     } catch (error) {
       console.error("Error fetching interviews:", error);
       setInterviewsError("Failed to load interviews");
@@ -225,6 +230,42 @@ function AdminDashboardContent() {
         [interviewId]: false,
       }));
       setDeleteConfirmInterviewId(null);
+    }
+  };
+
+  const handleRetryRating = async (interviewId: string) => {
+    if (!token) return;
+    if (retryingRatingByInterview[interviewId]) return;
+
+    setRetryingRatingByInterview((prev) => ({
+      ...prev,
+      [interviewId]: true,
+    }));
+
+    try {
+      await retryInterviewRating(token, interviewId);
+      setInterviews((prev) =>
+        prev.map((item) =>
+          item.id === interviewId
+            ? {
+                ...item,
+                rating_comment:
+                  "Manual retry requested. Retrying rating generation now.",
+                language_rating_comment:
+                  "Manual retry requested. Retrying rating generation now.",
+              }
+            : item
+        )
+      );
+      showEmailToast("success", "Retrying rating generation");
+    } catch (error) {
+      console.error("Error retrying rating:", error);
+      showEmailToast("error", "Failed to retry rating");
+    } finally {
+      setRetryingRatingByInterview((prev) => ({
+        ...prev,
+        [interviewId]: false,
+      }));
     }
   };
 
@@ -961,6 +1002,18 @@ function AdminDashboardContent() {
                             : interview.status === "completed"
                               ? "Pending"
                               : "Not rated";
+                        const hasReport =
+                          typeof interview.rating === "number" ||
+                          typeof interview.language_rating === "number";
+                        const ratingFailed =
+                          !hasReport &&
+                          interview.status === "completed" &&
+                          typeof interview.rating_comment === "string" &&
+                          /rating generation failed|failed to generate rating/i.test(
+                            interview.rating_comment
+                          );
+                        const isRetryingRating =
+                          Boolean(retryingRatingByInterview[interview.id]);
                         const messages = messagesByInterview[interview.id] || [];
                         const isLoadingMessages = loadingMessagesByInterview[interview.id];
                         const hasLoadedMessages = loadedMessagesByInterview[interview.id];
@@ -1042,6 +1095,24 @@ function AdminDashboardContent() {
                                   <p className="text-xs text-slate-600 mt-1">
                                     {interview.language_rating_comment}
                                   </p>
+                                )}
+                                {ratingFailed && (
+                                  <div className="mt-3">
+                                    <button
+                                      type="button"
+                                      onClick={(event) => {
+                                        event.preventDefault();
+                                        event.stopPropagation();
+                                        void handleRetryRating(interview.id);
+                                      }}
+                                      disabled={isRetryingRating}
+                                      className="inline-flex items-center rounded-md border border-slate-300 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                                    >
+                                      {isRetryingRating
+                                        ? "Retrying..."
+                                        : "Retry Rating"}
+                                    </button>
+                                  </div>
                                 )}
                               </div>
                               {isLoadingMessages && (

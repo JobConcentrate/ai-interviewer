@@ -282,6 +282,18 @@ export class DatabaseService {
     if (error) throw error;
   }
 
+  async updateInterviewLanguage(
+    interviewId: string,
+    language: string
+  ): Promise<void> {
+    const { error } = await supabase
+      .from('interviews')
+      .update({ language })
+      .eq('id', interviewId);
+
+    if (error) throw error;
+  }
+
   async updateInterviewRole(
     interviewId: string,
     roleId?: string | null,

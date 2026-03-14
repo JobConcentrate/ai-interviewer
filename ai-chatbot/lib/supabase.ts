@@ -32,6 +32,7 @@ export type Interview = {
   access_token: string | null;
   candidate_name: string | null;
   candidate_email: string | null;
+  language: string | null;
   status: 'in_progress' | 'completed';
   rating: number | null;
   rating_comment: string | null;
