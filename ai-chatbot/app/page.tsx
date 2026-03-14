@@ -4,7 +4,7 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { useState, Suspense, useEffect } from "react";
+import { useState, Suspense, useEffect, useRef } from "react";
 import { Interview, InterviewMessage, Role } from "@/lib/supabase";
 import {
   fetchRoles,
@@ -77,6 +77,7 @@ function AdminDashboardContent() {
   const [retryingRatingByInterview, setRetryingRatingByInterview] = useState<
     Record<string, boolean>
   >({});
+  const ratingPollTimeoutsRef = useRef<Record<string, number>>({});
 
   // Guard: missing token or employer
   if (!token || !employer) {
@@ -104,6 +105,34 @@ function AdminDashboardContent() {
     setLink(null);
     setLinkExpiresAt(null);
   }, [interviewMode, interviewLanguage, role]);
+
+  useEffect(() => {
+    return () => {
+      Object.values(ratingPollTimeoutsRef.current).forEach((timeoutId) => {
+        window.clearTimeout(timeoutId);
+      });
+      ratingPollTimeoutsRef.current = {};
+    };
+  }, []);
+
+  useEffect(() => {
+    if (activeTab !== "candidates") return;
+
+    interviews.forEach((interview) => {
+      const hasReport =
+        typeof interview.rating === "number" ||
+        typeof interview.language_rating === "number";
+      const isRetryingMessage =
+        typeof interview.rating_comment === "string" &&
+        /retrying attempt|retrying in 60 seconds/i.test(
+          interview.rating_comment
+        );
+
+      if (interview.status === "completed" && !hasReport && isRetryingMessage) {
+        scheduleRatingPoll(interview.id);
+      }
+    });
+  }, [activeTab, interviews]);
 
   const loadRoles = async (attempt = 1) => {
     try {
@@ -145,6 +174,52 @@ function AdminDashboardContent() {
     } finally {
       setLoadingInterviews(false);
     }
+  };
+
+  const refreshInterviews = async () => {
+    if (!token) return null;
+
+    try {
+      const data = await fetchInterviews(token);
+      setInterviews(data.interviews || []);
+      return data.interviews || [];
+    } catch (error) {
+      console.error("Error refreshing interviews:", error);
+      return null;
+    }
+  };
+
+  const scheduleRatingPoll = (interviewId: string) => {
+    if (ratingPollTimeoutsRef.current[interviewId]) return;
+
+    const maxAttempts = 12;
+    const pollDelayMs = 10000;
+
+    const pollForRating = async (attempt: number) => {
+      const updated = await refreshInterviews();
+      const match = updated?.find((item) => item.id === interviewId) || null;
+      const hasReport =
+        match &&
+        (typeof match.rating === "number" ||
+          typeof match.language_rating === "number");
+      if (hasReport || attempt >= maxAttempts) {
+        if (ratingPollTimeoutsRef.current[interviewId]) {
+          window.clearTimeout(ratingPollTimeoutsRef.current[interviewId]);
+          delete ratingPollTimeoutsRef.current[interviewId];
+        }
+        return;
+      }
+
+      const timeoutId = window.setTimeout(() => {
+        void pollForRating(attempt + 1);
+      }, pollDelayMs);
+      ratingPollTimeoutsRef.current[interviewId] = timeoutId;
+    };
+
+    const timeoutId = window.setTimeout(() => {
+      void pollForRating(1);
+    }, pollDelayMs);
+    ratingPollTimeoutsRef.current[interviewId] = timeoutId;
   };
 
   const loadMessagesForInterview = async (interviewId: string) => {
@@ -258,6 +333,7 @@ function AdminDashboardContent() {
         )
       );
       showEmailToast("success", "Retrying rating generation");
+      scheduleRatingPoll(interviewId);
     } catch (error) {
       console.error("Error retrying rating:", error);
       showEmailToast("error", "Failed to retry rating");
@@ -1014,6 +1090,10 @@ function AdminDashboardContent() {
                           );
                         const isRetryingRating =
                           Boolean(retryingRatingByInterview[interview.id]);
+                        const showLanguageComment =
+                          Boolean(interview.language_rating_comment) &&
+                          interview.language_rating_comment !==
+                            interview.rating_comment;
                         const messages = messagesByInterview[interview.id] || [];
                         const isLoadingMessages = loadingMessagesByInterview[interview.id];
                         const hasLoadedMessages = loadedMessagesByInterview[interview.id];
@@ -1091,7 +1171,7 @@ function AdminDashboardContent() {
                                       ? "Rating comment pending."
                                       : "Rating will be generated after completion.")}
                                 </p>
-                                {interview.language_rating_comment && (
+                                {showLanguageComment && (
                                   <p className="text-xs text-slate-600 mt-1">
                                     {interview.language_rating_comment}
                                   </p>
@@ -1109,8 +1189,8 @@ function AdminDashboardContent() {
                                       className="inline-flex items-center rounded-md border border-slate-300 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-700 hover:bg-slate-100 disabled:opacity-50"
                                     >
                                       {isRetryingRating
-                                        ? "Retrying..."
-                                        : "Retry Rating"}
+                                        ? "Regenerating..."
+                                        : "Regenerate Rating"}
                                     </button>
                                   </div>
                                 )}

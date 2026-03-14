@@ -292,7 +292,7 @@ export class InterviewService {
         lastError = errorMessage;
         const message =
           attempt < attempts
-            ? `Rating generation error: ${errorMessage}. Retrying in 60 seconds (${attempt}/${attempts}).`
+            ? `Rating generation error: ${errorMessage}. Retrying attempt ${Math.min(attempt + 1, attempts)} of ${attempts} in 60 seconds.`
             : `Rating generation failed: ${errorMessage}.`;
         console.warn(message);
         await dbService.updateInterviewRatingComment(state.interviewId!, message);
