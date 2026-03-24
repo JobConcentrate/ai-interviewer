@@ -29,7 +29,17 @@ export async function sendInterviewMessage(
     })
   });
 
-  if (!res.ok) throw new Error("API error");
+  if (!res.ok) {
+    let errorMessage = "API error";
+    try {
+      const payload = await res.json();
+      if (payload?.message) errorMessage = payload.message;
+      else if (payload?.error) errorMessage = payload.error;
+    } catch {
+      // Ignore JSON parse errors.
+    }
+    throw new Error(errorMessage);
+  }
 
   return res.json();
 }
@@ -62,7 +72,17 @@ export async function fetchPreviousChat(
     })
   });
 
-  if (!res.ok) throw new Error("Failed to fetch previous chat");
+  if (!res.ok) {
+    let errorMessage = "Failed to fetch previous chat";
+    try {
+      const payload = await res.json();
+      if (payload?.message) errorMessage = payload.message;
+      else if (payload?.error) errorMessage = payload.error;
+    } catch {
+      // Ignore JSON parse errors.
+    }
+    throw new Error(errorMessage);
+  }
 
   return res.json();
 }

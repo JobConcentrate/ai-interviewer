@@ -1,4 +1,5 @@
-import { supabase, Employer, Role, Interview, InterviewMessage } from './supabase';
+import type { Employer, Role, Interview, InterviewMessage } from "./supabase";
+import { supabaseServer as supabase } from "./supabase.server";
 
 export class DatabaseService {
   // Employer operations
@@ -287,11 +288,17 @@ export class DatabaseService {
     language: string
   ): Promise<void> {
     const { error } = await supabase
-      .from('interviews')
+      .from("interviews")
       .update({ language })
-      .eq('id', interviewId);
+      .eq("id", interviewId);
 
-    if (error) throw error;
+    if (error) {
+      // Backward compatibility: older schemas may not have the language column.
+      if ((error as { code?: string })?.code === "PGRST204") {
+        return;
+      }
+      throw error;
+    }
   }
 
   async updateInterviewRole(
